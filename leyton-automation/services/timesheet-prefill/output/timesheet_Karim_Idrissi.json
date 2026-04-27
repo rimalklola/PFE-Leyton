@@ -1,0 +1,42 @@
+{
+  "consultant": "Karim Idrissi",
+  "email": "k.idrissi@leyton.com",
+  "generated_at": "2026-04-24T13:23:10.775549",
+  "status": "pre-filled \u2014 awaiting consultant validation",
+  "days": [
+    {
+      "date": "2025-04-21",
+      "total_hours": 5.5,
+      "entries": [
+        {
+          "client": "TechNova Solutions",
+          "client_id": "CLI-002",
+          "activity": "Audit session \u2014 TechNova Solutions",
+          "category": "Audit",
+          "hours": 3.5
+        },
+        {
+          "client": "TechNova Solutions",
+          "client_id": "CLI-002",
+          "activity": "Timesheet review \u2014 TechNova Solutions",
+          "category": "Audit",
+          "hours": 2.0
+        }
+      ]
+    },
+    {
+      "date": "2025-04-22",
+      "total_hours": 1.5,
+      "entries": [
+        {
+          "client": "TechNova Solutions",
+          "client_id": "CLI-002",
+          "activity": "Belspo notification update \u2014 TechNova Solutions",
+          "category": "Belspo",
+          "hours": 1.5
+        }
+      ]
+    }
+  ],
+  "total_hours": 7.0
+}

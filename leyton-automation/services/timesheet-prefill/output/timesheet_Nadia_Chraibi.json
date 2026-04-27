@@ -1,0 +1,42 @@
+{
+  "consultant": "Nadia Chraibi",
+  "email": "n.chraibi@leyton.com",
+  "generated_at": "2026-04-24T13:23:10.776834",
+  "status": "pre-filled \u2014 awaiting consultant validation",
+  "days": [
+    {
+      "date": "2025-04-21",
+      "total_hours": 2.0,
+      "entries": [
+        {
+          "client": "GreenBuild SA",
+          "client_id": "CLI-003",
+          "activity": "Kick-off \u2014 GreenBuild SA",
+          "category": "Client Meeting",
+          "hours": 2.0
+        }
+      ]
+    },
+    {
+      "date": "2025-04-22",
+      "total_hours": 5.5,
+      "entries": [
+        {
+          "client": "GreenBuild SA",
+          "client_id": "CLI-003",
+          "activity": "R&D project analysis \u2014 GreenBuild SA",
+          "category": "Audit",
+          "hours": 3.0
+        },
+        {
+          "client": "GreenBuild SA",
+          "client_id": "CLI-003",
+          "activity": "DT writing \u2014 GreenBuild SA",
+          "category": "Report Writing",
+          "hours": 2.5
+        }
+      ]
+    }
+  ],
+  "total_hours": 7.5
+}
