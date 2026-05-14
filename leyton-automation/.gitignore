@@ -1,0 +1,41 @@
+# ── Environment files (NEVER commit real secrets) ──
+.env
+.env.production
+.env.local
+*.env
+
+# ── Terraform state (contains sensitive outputs) ──
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
+*.tfstate
+*.tfstate.*
+crash.log
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+coverage.xml
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# ── Service outputs (generated files, not source) ──
+services/*/output/
+
+# ── SQLite database (runtime state, not source) ──
+runs.db
+
+# ── OS / editor ──
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

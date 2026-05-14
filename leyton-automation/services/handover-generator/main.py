@@ -1,9 +1,17 @@
 import os
+import sys
+import time
+
+_SERVICES_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _SERVICES_ROOT not in sys.path:
+    sys.path.insert(0, _SERVICES_ROOT)
+
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
 from datetime import datetime
 from mock_data import MOCK_HANDOVER_DATA
+from shared.registry import log_run
+from shared.logger import ServiceLogger
 
 OUTPUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 
@@ -14,14 +22,16 @@ WHITE = "FFFFFF"
 GREEN = "E2EFDA"
 RED = "FCE4D6"
 
+
 def header_style(cell, bg=DARK_BLUE, fg=WHITE, bold=True):
     cell.fill = PatternFill(start_color=bg, end_color=bg, fill_type="solid")
     cell.font = Font(color=fg, bold=bold)
     cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
     cell.border = Border(
         left=Side(style="thin"), right=Side(style="thin"),
-        top=Side(style="thin"), bottom=Side(style="thin")
+        top=Side(style="thin"), bottom=Side(style="thin"),
     )
+
 
 def section_style(cell, bg=LIGHT_BLUE):
     cell.fill = PatternFill(start_color=bg, end_color=bg, fill_type="solid")
@@ -29,8 +39,9 @@ def section_style(cell, bg=LIGHT_BLUE):
     cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
     cell.border = Border(
         left=Side(style="thin"), right=Side(style="thin"),
-        top=Side(style="thin"), bottom=Side(style="thin")
+        top=Side(style="thin"), bottom=Side(style="thin"),
     )
+
 
 def value_style(cell, bg=WHITE):
     cell.fill = PatternFill(start_color=bg, end_color=bg, fill_type="solid")
@@ -38,8 +49,9 @@ def value_style(cell, bg=WHITE):
     cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
     cell.border = Border(
         left=Side(style="thin"), right=Side(style="thin"),
-        top=Side(style="thin"), bottom=Side(style="thin")
+        top=Side(style="thin"), bottom=Side(style="thin"),
     )
+
 
 def write_row(ws, row, label, value, label_bg=LIGHT_GREY):
     label_cell = ws.cell(row=row, column=1, value=label)
@@ -49,11 +61,13 @@ def write_row(ws, row, label, value, label_bg=LIGHT_GREY):
     ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=4)
     ws.row_dimensions[row].height = 30
 
+
 def write_section_header(ws, row, title):
     cell = ws.cell(row=row, column=1, value=title)
     header_style(cell)
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
     ws.row_dimensions[row].height = 25
+
 
 def generate_handover(data: dict) -> str:
     wb = openpyxl.Workbook()
@@ -67,9 +81,7 @@ def generate_handover(data: dict) -> str:
 
     row = 1
 
-    # Title
-    title_cell = ws.cell(row=row, column=1,
-        value=f"HANDOVER FILE - {data['account_name'].upper()}")
+    title_cell = ws.cell(row=row, column=1, value=f"HANDOVER FILE - {data['account_name'].upper()}")
     title_cell.font = Font(bold=True, size=14, color=WHITE)
     title_cell.fill = PatternFill(start_color=DARK_BLUE, end_color=DARK_BLUE, fill_type="solid")
     title_cell.alignment = Alignment(horizontal="center", vertical="center")
@@ -77,15 +89,13 @@ def generate_handover(data: dict) -> str:
     ws.row_dimensions[row].height = 35
     row += 1
 
-    # Generated date
     date_cell = ws.cell(row=row, column=1,
-        value=f"Generated on: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+                        value=f"Generated on: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
     date_cell.font = Font(italic=True, color="666666")
     date_cell.alignment = Alignment(horizontal="right")
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
     row += 2
 
-    # Team Composition
     write_section_header(ws, row, "TEAM COMPOSITION")
     row += 1
     write_row(ws, row, "HO Done With", data["team"]["ho_done_with"])
@@ -95,7 +105,6 @@ def generate_handover(data: dict) -> str:
     write_row(ws, row, "Sales", data["team"]["sales"])
     row += 2
 
-    # Company Info
     write_section_header(ws, row, "COMPANY INFORMATION")
     row += 1
     ci = data["company_info"]
@@ -114,7 +123,6 @@ def generate_handover(data: dict) -> str:
     write_row(ws, row, "Previous Control", ci["previous_control"])
     row += 2
 
-    # Contract Info
     write_section_header(ws, row, "CONTRACT INFORMATION")
     row += 1
     co = data["contract_info"]
@@ -127,7 +135,6 @@ def generate_handover(data: dict) -> str:
     write_row(ws, row, "GDPR", co["gdpr"])
     row += 2
 
-    # POCs
     write_section_header(ws, row, "POINTS OF CONTACT")
     row += 1
     poc = data["pocs"]
@@ -138,7 +145,6 @@ def generate_handover(data: dict) -> str:
     write_row(ws, row, "Social Secretary", poc["social_secretary"])
     row += 2
 
-    # Previous Mission Info
     write_section_header(ws, row, "PREVIOUS MISSION INFORMATION")
     row += 1
     pm = data["previous_mission"]
@@ -163,7 +169,6 @@ def generate_handover(data: dict) -> str:
     write_row(ws, row, "Introduction Email", pm["introduction_email"])
     row += 2
 
-    # Belspo Notifications
     write_section_header(ws, row, "BELSPO NOTIFICATIONS")
     row += 1
     for col, h in enumerate(["Notification ID", "Project Title", "Status", "Covers Until"], 1):
@@ -180,7 +185,6 @@ def generate_handover(data: dict) -> str:
         row += 1
     row += 1
 
-    # Employees
     write_section_header(ws, row, "ELIGIBLE EMPLOYEES")
     row += 1
     for col, h in enumerate(["Employee Name", "Diploma", "R&D %", ""], 1):
@@ -196,7 +200,6 @@ def generate_handover(data: dict) -> str:
         row += 1
     row += 1
 
-    # Data Checklist
     write_section_header(ws, row, "DATA CHECKLIST")
     row += 1
     checklist = data["data_checklist"]
@@ -204,15 +207,14 @@ def generate_handover(data: dict) -> str:
         "Calculation Sheets": checklist["calculation_sheets"],
         "Control Documents": checklist["control_documents"],
         "Diplomas": checklist["diplomas"],
-        "Individual Accounts": checklist["individual_accounts"]
+        "Individual Accounts": checklist["individual_accounts"],
     }
     for label, done in items.items():
         label_cell = ws.cell(row=row, column=1, value=label)
         section_style(label_cell, bg=LIGHT_GREY)
         status = "OK" if done else "MISSING"
         status_cell = ws.cell(row=row, column=2, value=status)
-        bg = GREEN if done else RED
-        value_style(status_cell, bg=bg)
+        value_style(status_cell, bg=(GREEN if done else RED))
         ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=4)
         ws.row_dimensions[row].height = 25
         row += 1
@@ -225,19 +227,28 @@ def generate_handover(data: dict) -> str:
 
 
 def run():
-    print(f"\n{'='*50}")
-    print(f"  LEYTON - Handover Sheet Generator")
-    print(f"  Running at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"{'='*50}\n")
+    log = ServiceLogger("handover-generator")
+    start = time.time()
+    log.info("Service started")
 
-    for data in MOCK_HANDOVER_DATA:
-        filepath = generate_handover(data)
-        print(f"[OK] {data['account_name']} - Handover sheet generated")
-        print(f"  Saved to: {filepath}\n")
+    filepaths = []
+    try:
+        for data in MOCK_HANDOVER_DATA:
+            filepath = generate_handover(data)
+            filepaths.append(filepath)
+            log.info("Handover generated", account=data["account_name"], output_file=filepath)
 
-    print(f"{'='*50}")
-    print(f"  Done. {len(MOCK_HANDOVER_DATA)} handover sheet(s) generated.")
-    print(f"{'='*50}\n")
+        duration_ms = int((time.time() - start) * 1000)
+        log_run("handover-generator", status="success", duration_ms=duration_ms)
+        log.info("Service completed", generated=len(filepaths), duration_ms=duration_ms)
+
+    except Exception as exc:
+        duration_ms = int((time.time() - start) * 1000)
+        log.error("Service failed", error=str(exc))
+        log_run("handover-generator", status="failed", error_message=str(exc), duration_ms=duration_ms)
+        raise
+
+    return filepaths
 
 
 if __name__ == "__main__":

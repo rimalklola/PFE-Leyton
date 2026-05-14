@@ -1,0 +1,1 @@
+# folder-creator — stdlib only, no third-party dependencies

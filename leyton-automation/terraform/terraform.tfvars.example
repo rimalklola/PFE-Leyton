@@ -1,0 +1,7 @@
+# Copy this file to terraform.tfvars and fill in the values.
+# terraform.tfvars is gitignored — never commit real tokens.
+
+railway_token          = "your-railway-api-token"
+github_owner           = "your-github-username"
+image_tag              = "latest"
+grafana_admin_password = "choose-a-strong-password"

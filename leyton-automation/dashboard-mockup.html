@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Leyton Automation Platform</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #F0F4F8; color: #1E293B; display: flex; height: 100vh; overflow: hidden; }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 240px; min-width: 240px; background: #001F4D; display: flex;
+    flex-direction: column; padding: 0; overflow: hidden;
+  }
+  .sidebar-logo {
+    padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .sidebar-logo .brand { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: 1px; }
+  .sidebar-logo .brand span { color: #4DA3FF; }
+  .sidebar-logo .sub { font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 2px; margin-top: 3px; }
+  .nav { padding: 16px 0; flex: 1; }
+  .nav-section { font-size: 10px; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 1.5px; padding: 12px 20px 6px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 12px; padding: 10px 20px;
+    color: rgba(255,255,255,0.6); cursor: pointer; font-size: 13.5px;
+    transition: all 0.15s; border-left: 3px solid transparent;
+  }
+  .nav-item:hover { color: #fff; background: rgba(255,255,255,0.05); }
+  .nav-item.active { color: #fff; background: rgba(77,163,255,0.12); border-left-color: #4DA3FF; }
+  .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+  .sidebar-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.08); }
+  .sidebar-footer .user { display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: #1565C0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; }
+  .user-info .name { font-size: 13px; font-weight: 600; color: #fff; }
+  .user-info .role { font-size: 11px; color: rgba(255,255,255,0.4); }
+
+  /* ── MAIN ── */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar {
+    background: #fff; padding: 0 28px; height: 60px; display: flex; align-items: center;
+    justify-content: space-between; border-bottom: 1px solid #E2E8F0; flex-shrink: 0;
+  }
+  .topbar-title { font-size: 18px; font-weight: 700; color: #0F172A; }
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+  .badge-live { background: #DCFCE7; color: #16A34A; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px; }
+  .dot-live { width: 7px; height: 7px; background: #16A34A; border-radius: 50%; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-primary { background: #003366; color: #fff; }
+  .btn-primary:hover { background: #1565C0; }
+  .btn-outline { background: transparent; color: #003366; border: 1.5px solid #CBD5E1; }
+  .btn-outline:hover { background: #F1F5F9; }
+  .btn-sm { padding: 6px 14px; font-size: 12px; }
+  .btn-run { background: #003366; color: #fff; }
+  .btn-run:hover { background: #1565C0; }
+
+  .content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+  /* ── PAGE visibility ── */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── KPI CARDS ── */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .kpi-card {
+    background: #fff; border-radius: 12px; padding: 20px 22px;
+    border: 1px solid #E2E8F0; display: flex; align-items: center; gap: 16px;
+  }
+  .kpi-icon { width: 48px; height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .kpi-icon.blue { background: #EFF6FF; }
+  .kpi-icon.green { background: #F0FDF4; }
+  .kpi-icon.amber { background: #FFFBEB; }
+  .kpi-icon.purple { background: #FAF5FF; }
+  .kpi-label { font-size: 12px; color: #64748B; font-weight: 500; margin-bottom: 4px; }
+  .kpi-value { font-size: 26px; font-weight: 800; color: #0F172A; line-height: 1; }
+  .kpi-sub { font-size: 11px; color: #94A3B8; margin-top: 4px; }
+  .kpi-sub.up { color: #16A34A; }
+  .kpi-sub.down { color: #DC2626; }
+
+  /* ── CHARTS ROW ── */
+  .charts-row { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .card { background: #fff; border-radius: 12px; border: 1px solid #E2E8F0; padding: 20px; }
+  .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .card-title { font-size: 14px; font-weight: 700; color: #0F172A; }
+  .card-sub { font-size: 12px; color: #94A3B8; }
+
+  /* ── RECENT RUNS TABLE ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #F1F5F9; background: #FAFAFA; }
+  tbody td { padding: 11px 14px; border-bottom: 1px solid #F8FAFC; color: #334155; }
+  tbody tr:hover { background: #F8FAFC; }
+  tbody tr:last-child td { border-bottom: none; }
+  .mono { font-family: monospace; font-size: 11px; color: #94A3B8; }
+
+  /* ── STATUS BADGES ── */
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-success { background: #DCFCE7; color: #15803D; }
+  .badge-failed { background: #FEE2E2; color: #DC2626; }
+  .badge-running { background: #DBEAFE; color: #1D4ED8; }
+  .badge-warning { background: #FEF3C7; color: #D97706; }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* ── SERVICES PAGE ── */
+  .services-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .service-card {
+    background: #fff; border-radius: 12px; border: 1px solid #E2E8F0;
+    padding: 20px; transition: box-shadow 0.15s;
+  }
+  .service-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+  .service-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .service-icon { width: 40px; height: 40px; border-radius: 10px; background: #EFF6FF; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .service-name { font-size: 14px; font-weight: 700; color: #0F172A; margin-bottom: 3px; }
+  .service-desc { font-size: 12px; color: #64748B; line-height: 1.5; margin-bottom: 14px; }
+  .service-meta { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; font-size: 12px; color: #64748B; }
+  .service-meta span { display: flex; align-items: center; gap: 6px; }
+  .service-footer { display: flex; justify-content: space-between; align-items: center; }
+  .progress-bar-wrap { height: 4px; background: #F1F5F9; border-radius: 4px; margin-bottom: 16px; overflow: hidden; }
+  .progress-bar { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #003366, #4DA3FF); }
+
+  /* ── HISTORY PAGE ── */
+  .filter-bar { display: flex; gap: 12px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
+  .filter-bar select, .filter-bar input {
+    padding: 8px 12px; border: 1.5px solid #E2E8F0; border-radius: 8px;
+    font-size: 13px; color: #334155; background: #fff; outline: none;
+  }
+  .filter-bar select:focus, .filter-bar input:focus { border-color: #4DA3FF; }
+
+  /* ── MONITORING PAGE ── */
+  .monitoring-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .health-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .health-card { background: #fff; border-radius: 12px; border: 1px solid #E2E8F0; padding: 16px; text-align: center; }
+  .health-circle { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+  .health-circle.green { background: #F0FDF4; }
+  .health-circle.amber { background: #FFFBEB; }
+  .health-circle.red { background: #FEF2F2; }
+  .health-name { font-size: 12px; font-weight: 600; color: #334155; }
+  .health-rate { font-size: 20px; font-weight: 800; color: #0F172A; margin: 4px 0; }
+  .health-runs { font-size: 11px; color: #94A3B8; }
+
+  /* ── SCROLLBAR ── */
+  .content::-webkit-scrollbar { width: 6px; }
+  .content::-webkit-scrollbar-track { background: transparent; }
+  .content::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 6px; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="brand">LEYTON<span>.</span></div>
+    <div class="sub">Automation Platform</div>
+  </div>
+  <nav class="nav">
+    <div class="nav-section">Main</div>
+    <div class="nav-item active" onclick="showPage('dashboard', this)">
+      <span class="icon">🏠</span> Dashboard
+    </div>
+    <div class="nav-item" onclick="showPage('services', this)">
+      <span class="icon">⚡</span> Services
+    </div>
+    <div class="nav-section">Data</div>
+    <div class="nav-item" onclick="showPage('history', this)">
+      <span class="icon">📋</span> Run History
+    </div>
+    <div class="nav-item" onclick="showPage('monitoring', this)">
+      <span class="icon">📊</span> Monitoring
+    </div>
+    <div class="nav-section">Settings</div>
+    <div class="nav-item" onclick="showPage('settings', this)">
+      <span class="icon">⚙️</span> Settings
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user">
+      <div class="avatar">FE</div>
+      <div class="user-info">
+        <div class="name">Fatine E.</div>
+        <div class="role">Consultant R&D</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="page-title">Dashboard</div>
+    <div class="topbar-right">
+      <div class="badge-live"><div class="dot-live"></div> API Connected</div>
+      <button class="btn btn-outline btn-sm">🔄 Refresh</button>
+      <button class="btn btn-primary btn-sm" onclick="showPage('services', document.querySelector('[onclick*=services]'))">+ Run Service</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ═══════════════ DASHBOARD PAGE ═══════════════ -->
+    <div class="page active" id="page-dashboard">
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon blue">🚀</div>
+          <div>
+            <div class="kpi-label">Total Runs</div>
+            <div class="kpi-value">142</div>
+            <div class="kpi-sub up">↑ 12 this week</div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon green">✅</div>
+          <div>
+            <div class="kpi-label">Success Rate</div>
+            <div class="kpi-value">96.5%</div>
+            <div class="kpi-sub up">↑ 2.1% vs last month</div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon amber">⏱️</div>
+          <div>
+            <div class="kpi-label">Avg Duration</div>
+            <div class="kpi-value">1.2s</div>
+            <div class="kpi-sub up">↓ 300ms faster</div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon purple">🏢</div>
+          <div>
+            <div class="kpi-label">Clients Processed</div>
+            <div class="kpi-value">38</div>
+            <div class="kpi-sub">Since Jan 2026</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Runs Over Time</div>
+              <div class="card-sub">Last 14 days</div>
+            </div>
+          </div>
+          <canvas id="runsChart" height="120"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Runs by Service</div>
+              <div class="card-sub">All time</div>
+            </div>
+          </div>
+          <canvas id="serviceChart" height="120"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Recent Runs</div>
+          <button class="btn btn-outline btn-sm" onclick="showPage('history', document.querySelectorAll('.nav-item')[3])">View all</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Run ID</th>
+                <th>Service</th>
+                <th>Client</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>Started</th>
+                <th>Output</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono">a3f9…d12e</td>
+                <td><strong>folder-creator</strong></td>
+                <td>Agfa-Gevaert</td>
+                <td><span class="badge badge-success"><span class="badge-dot"></span>Success</span></td>
+                <td>234 ms</td>
+                <td>Today, 14:32</td>
+                <td><a href="#" style="color:#1565C0;font-size:12px">📁 Open</a></td>
+              </tr>
+              <tr>
+                <td class="mono">b72c…8af1</td>
+                <td><strong>timesheet-prefill</strong></td>
+                <td>Solvay SA</td>
+                <td><span class="badge badge-success"><span class="badge-dot"></span>Success</span></td>
+                <td>1 420 ms</td>
+                <td>Today, 13:47</td>
+                <td><a href="#" style="color:#1565C0;font-size:12px">📊 Open</a></td>
+              </tr>
+              <tr>
+                <td class="mono">c19d…f330</td>
+                <td><strong>belspo-extractor</strong></td>
+                <td>UCB Pharma</td>
+                <td><span class="badge badge-success"><span class="badge-dot"></span>Success</span></td>
+                <td>890 ms</td>
+                <td>Today, 11:15</td>
+                <td><a href="#" style="color:#1565C0;font-size:12px">📊 Open</a></td>
+              </tr>
+              <tr>
+                <td class="mono">d44e…2bc7</td>
+                <td><strong>pdf-timesheet-extractor</strong></td>
+                <td>Bekaert NV</td>
+                <td><span class="badge badge-failed"><span class="badge-dot"></span>Failed</span></td>
+                <td>302 ms</td>
+                <td>Yesterday, 17:03</td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <td class="mono">e88f…7cd4</td>
+                <td><strong>handover-generator</strong></td>
+                <td>IBA Group</td>
+                <td><span class="badge badge-success"><span class="badge-dot"></span>Success</span></td>
+                <td>560 ms</td>
+                <td>Yesterday, 16:20</td>
+                <td><a href="#" style="color:#1565C0;font-size:12px">📄 Open</a></td>
+              </tr>
+              <tr>
+                <td class="mono">f01a…4de9</td>
+                <td><strong>web-scraper</strong></td>
+                <td>Proximus</td>
+                <td><span class="badge badge-success"><span class="badge-dot"></span>Success</span></td>
+                <td>3 200 ms</td>
+                <td>Yesterday, 09:44</td>
+                <td><a href="#" style="color:#1565C0;font-size:12px">📊 Open</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ SERVICES PAGE ═══════════════ -->
+    <div class="page" id="page-services">
+      <div style="margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:13px;color:#64748B;">8 services available — click <strong>Run</strong> to execute any service</div>
+        <button class="btn btn-primary btn-sm" onclick="runAll()">▶ Run All Services</button>
+      </div>
+      <div class="services-grid">
+
+        <div class="service-card">
+          <div class="service-card-header">
+            <div class="service-icon">📁</div>
+            <span class="badge badge-success"><span class="badge-dot"></span>Last: OK</span>
+          </div>
+          <div class="service-name">Folder Creator</div>
+          <div class="service-desc">Creates structured client folders with all required subfolders and metadata file.</div>
+          <div class="progress-bar-wrap"><div class="progress-bar" style="width:100%"></div></div>
+          <div class="service-meta">
+            <span>🕐 Last run: Today 14:32</span>
+            <span>⏱ Duration: 234 ms</span>
+          </div>
+          <div class="service-footer">
+            <span class="badge badge-success" style="font-size:11px">15 subfolders/client</span>
+            <button class="btn btn-run btn-sm" onclick="runService(this, 'folder-creator')">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="service-card">
+          <div class="service-card-header">
+            <div class="service-icon">📊</div>
+            <span class="badge badge-success"><span class="badge-dot"></span>Last: OK</span>
+          </div>
+          <div class="service-name">Timesheet Prefill</div>
+          <div class="service-desc">Generates pre-filled Excel timesheets with R&D hours per employee and month.</div>
+          <div class="progress-bar-wrap"><div class="progress-bar" style="width:100%"></div></div>
+          <div class="service-meta">
+            <span>🕐 Last run: Today 13:47</span>
+            <span>⏱ Duration: 1 420 ms</span>
+          </div>
+          <div class="service-footer">
+            <span class="badge badge-success" style="font-size:11px">Excel output</span>
+            <button class="btn btn-run btn-sm" onclick="runService(this, 'timesheet-prefill')">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="service-card">
+          <div class="service-card-header">
+            <div class="service-icon">📜</div>
+            <span class="badge badge-success"><span class="badge-dot"></span>Last: OK</span>
+          </div>
+          <div class="service-name">Belspo Extractor</div>
+          <div class="service-desc">Extracts and formats Belspo project notifications for R&D tax filings.</div>
+          <div class="progress-bar-wrap"><div class="progress-bar" style="width:87%"></div></div>
+          <div class="service-meta">
+            <span>🕐 Last run: Today 11:15</span>
+            <span>⏱ Duration: 890 ms</span>
+          </div>
+          <div class="service-footer">
+            <span class="badge badge-success" style="font-size:11px">Excel output</span>
+            <button class="btn btn-run btn-sm" onclick="runService(this, 'belspo-extractor')">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="service-card">
+          <div class="service-card-header">
+            <div class="service-icon">📋</div>
+            <span class="badge badge-success"><span class="badge-dot"></span>Last: OK</span>
+          </div>
+          <div class="service-name">Handover Generator</div>
+          <div class="service-desc">Produces client-ready mission handover reports with all key deliverables.</div>
+          <div class="progress-bar-wrap"><div class="progress-bar" style="width:100%"></div></div>
+          <div class="service-meta">
+            <span>🕐 Last run: Yesterday 16:20</span>
+            <span>⏱ Duration: 560 ms</span>
+          </div>
+          <div class="service-footer">
+            <span class="badge badge-success" style="font-size:11px">Excel output</span>
+            <button class="btn btn-run btn-sm" onclick="runService(this, 'handover-generator')">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="service-card">
+          <div class="service-card-header">
+            <div class="service-icon">🛰️</div>
+            <span class="badge badge-warning"><span class="badge-dot"></span>No recent run</span>
+          </div>
+          <div class="service-name">Galileo Reporter</div>
+          <div class="service-desc">Generates a color-coded alert matrix showing service health across all clients.</div>
+          <div class="progress-bar-wrap"><div class="progress-bar" style="width:40%"></div></div>
+          <div class="service-meta">
+            <span>🕐 Last run: 3 days ago</span>
+            <span>⏱ Duration: 670 ms</span>
+          </div>
+          <div class="service-footer">
+            <span class="badge badge-warning" style="font-size:11px">Alert matrix</span>
+            <button class="btn btn-run btn-sm" onclick="runService(this, 'galileo-reporter')">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="service-card">
+          <div class="service-card-header">
+            <div class="service-icon">🌐</div>
+            <span class="badge badge-success"><span class="badge-dot"></span>Last: OK</span>
+          </div>
+          <div class="service-name">Web Scraper</div>
+          <div class="service-desc">Scrapes Belgian company websites to extract R&D keywords, sectors, and technologies.</div>
+          <div class="progress-bar-wrap"><div class="progress-bar" style="width:100%"></div></div>
+          <div class="service-meta">
+            <span>🕐 Last run: Yesterday 09:44</span>
+            <span>⏱ Duration: 3 200 ms</span>
+          </div>
+          <div class="service-footer">
+            <span class="badge badge-success" style="font-size:11px">Tech profile</span>
+            <button class="btn btn-run btn-sm" onclick="runService(this, 'web-scraper')">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="service-card">
+          <div class="service-card-header">
+            <div class="service-icon">📄</div>
+            <span class="badge badge-failed"><span class="badge-dot"></span>Last: Failed</span>
+          </div>
+          <div class="service-name">PDF Timesheet Extractor</div>
+          <div class="service-desc">Extracts and validates timesheet data from PDFs, outputs a clean pivot table.</div>
+          <div class="progress-bar-wrap"><div class="progress-bar" style="width:0%;background:#FCA5A5"></div></div>
+          <div class="service-meta">
+            <span>🕐 Last run: Yesterday 17:03</span>
+            <span style="color:#DC2626">⚠ Missing column: Employee</span>
+          </div>
+          <div class="service-footer">
+            <span class="badge badge-failed" style="font-size:11px">Needs attention</span>
+            <button class="btn btn-run btn-sm" onclick="runService(this, 'pdf-timesheet-extractor')">▶ Retry</button>
+          </div>
+        </div>
+
+        <div class="service-card">
+          <div class="service-card-header">
+            <div class="service-icon">🤝</div>
+            <span class="badge badge-success"><span class="badge-dot"></span>Last: OK</span>
+          </div>
+          <div class="service-name">Client Onboarding Generator</div>
+          <div class="service-desc">Creates client-facing onboarding Excel with timeline, document checklist and contacts.</div>
+          <div class="progress-bar-wrap"><div class="progress-bar" style="width:100%"></div></div>
+          <div class="service-meta">
+            <span>🕐 Last run: 2 days ago</span>
+            <span>⏱ Duration: 410 ms</span>
+          </div>
+          <div class="service-footer">
+            <span class="badge badge-success" style="font-size:11px">Excel output</span>
+            <button class="btn btn-run btn-sm" onclick="runService(this, 'client-onboarding-generator')">▶ Run</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Run log panel -->
+      <div id="run-log" style="display:none;margin-top:20px;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">▶ Execution Log</div>
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('run-log').style.display='none'">✕ Close</button>
+          </div>
+          <div id="run-log-content" style="font-family:monospace;font-size:12px;color:#334155;line-height:1.8;max-height:200px;overflow-y:auto;background:#F8FAFC;padding:12px;border-radius:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ HISTORY PAGE ═══════════════ -->
+    <div class="page" id="page-history">
+      <div class="filter-bar">
+        <select>
+          <option>All Services</option>
+          <option>folder-creator</option>
+          <option>timesheet-prefill</option>
+          <option>belspo-extractor</option>
+          <option>handover-generator</option>
+          <option>galileo-reporter</option>
+          <option>web-scraper</option>
+          <option>pdf-timesheet-extractor</option>
+          <option>client-onboarding-generator</option>
+        </select>
+        <select>
+          <option>All Statuses</option>
+          <option>Success</option>
+          <option>Failed</option>
+          <option>Running</option>
+        </select>
+        <input type="date" value="2026-05-01" />
+        <input type="date" value="2026-05-11" />
+        <button class="btn btn-primary btn-sm">Filter</button>
+        <button class="btn btn-outline btn-sm">Export CSV</button>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Run History</div>
+          <div class="card-sub">142 total runs</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Run ID</th><th>Service</th><th>Client</th><th>Status</th><th>Duration</th><th>Output File</th><th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody">
+              <!-- generated by JS -->
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;font-size:12px;color:#64748B;">
+          <span>Showing 1–20 of 142</span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm">← Prev</button>
+            <button class="btn btn-primary btn-sm">Next →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ MONITORING PAGE ═══════════════ -->
+    <div class="page" id="page-monitoring">
+      <div style="margin-bottom:20px;">
+        <div style="font-size:13px;color:#64748B;">Real-time health of all services</div>
+      </div>
+
+      <div class="health-row">
+        <div class="health-card">
+          <div class="health-circle green">📁</div>
+          <div class="health-name">Folder Creator</div>
+          <div class="health-rate" style="color:#16A34A">100%</div>
+          <div class="health-runs">28 runs</div>
+        </div>
+        <div class="health-card">
+          <div class="health-circle green">📊</div>
+          <div class="health-name">Timesheet Prefill</div>
+          <div class="health-rate" style="color:#16A34A">97%</div>
+          <div class="health-runs">22 runs</div>
+        </div>
+        <div class="health-card">
+          <div class="health-circle green">📜</div>
+          <div class="health-name">Belspo Extractor</div>
+          <div class="health-rate" style="color:#16A34A">95%</div>
+          <div class="health-runs">18 runs</div>
+        </div>
+        <div class="health-card">
+          <div class="health-circle amber">🛰️</div>
+          <div class="health-name">Galileo Reporter</div>
+          <div class="health-rate" style="color:#D97706">88%</div>
+          <div class="health-runs">8 runs</div>
+        </div>
+        <div class="health-card">
+          <div class="health-circle green">📋</div>
+          <div class="health-name">Handover Generator</div>
+          <div class="health-rate" style="color:#16A34A">100%</div>
+          <div class="health-runs">14 runs</div>
+        </div>
+        <div class="health-card">
+          <div class="health-circle green">🌐</div>
+          <div class="health-name">Web Scraper</div>
+          <div class="health-rate" style="color:#16A34A">96%</div>
+          <div class="health-runs">24 runs</div>
+        </div>
+        <div class="health-card">
+          <div class="health-circle red">📄</div>
+          <div class="health-name">PDF Extractor</div>
+          <div class="health-rate" style="color:#DC2626">71%</div>
+          <div class="health-runs">17 runs</div>
+        </div>
+        <div class="health-card">
+          <div class="health-circle green">🤝</div>
+          <div class="health-name">Onboarding Gen.</div>
+          <div class="health-rate" style="color:#16A34A">100%</div>
+          <div class="health-runs">11 runs</div>
+        </div>
+      </div>
+
+      <div class="monitoring-grid">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Success Rate by Service</div>
+          </div>
+          <canvas id="successChart" height="160"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Avg Duration by Service (ms)</div>
+          </div>
+          <canvas id="durationChart" height="160"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Error Log</div>
+          <span class="badge badge-failed">2 errors</span>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Service</th><th>Error</th><th>Run ID</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Yesterday 17:03</td>
+              <td><strong>pdf-timesheet-extractor</strong></td>
+              <td style="color:#DC2626">KeyError: 'Employee' column not found in PDF table</td>
+              <td class="mono">d44e…2bc7</td>
+            </tr>
+            <tr>
+              <td>May 08, 10:12</td>
+              <td><strong>galileo-reporter</strong></td>
+              <td style="color:#DC2626">FileNotFoundError: runs.db not found, falling back to mock data</td>
+              <td class="mono">91ab…cc31</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════ SETTINGS PAGE ═══════════════ -->
+    <div class="page" id="page-settings">
+      <div class="card" style="max-width:600px;">
+        <div class="card-header"><div class="card-title">Platform Settings</div></div>
+        <div style="display:flex;flex-direction:column;gap:20px;font-size:13px;">
+          <div>
+            <div style="font-weight:600;margin-bottom:6px;color:#334155;">API Base URL</div>
+            <input style="width:100%;padding:9px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px" value="http://localhost:8000" />
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:6px;color:#334155;">Database Path</div>
+            <input style="width:100%;padding:9px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px" value="C:\...\leyton-automation\runs.db" />
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:6px;color:#334155;">Output Directory</div>
+            <input style="width:100%;padding:9px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px" value="C:\...\leyton-automation\services\{service}\output" />
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:6px;color:#334155;">Auto-refresh interval</div>
+            <select style="padding:9px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px">
+              <option>Every 10 seconds</option>
+              <option>Every 30 seconds</option>
+              <option selected>Every 60 seconds</option>
+              <option>Manual only</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-primary">Save Settings</button>
+            <button class="btn btn-outline">Reset to defaults</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+// ── NAVIGATION ──
+const pageTitles = {
+  dashboard: 'Dashboard',
+  services: 'Services',
+  history: 'Run History',
+  monitoring: 'Monitoring',
+  settings: 'Settings',
+};
+
+function showPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  if (el) el.classList.add('active');
+  document.getElementById('page-title').textContent = pageTitles[name] || name;
+  if (name === 'history') buildHistoryTable();
+  if (name === 'monitoring') buildMonitoringCharts();
+  if (name === 'dashboard') buildDashboardCharts();
+}
+
+// ── RUN SERVICE SIMULATION ──
+function runService(btn, name) {
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Running…';
+  btn.disabled = true;
+  const log = document.getElementById('run-log');
+  const content = document.getElementById('run-log-content');
+  log.style.display = 'block';
+  const lines = [
+    `[${new Date().toLocaleTimeString()}] INFO  Starting ${name}…`,
+    `[${new Date().toLocaleTimeString()}] INFO  Loading mock data…`,
+    `[${new Date().toLocaleTimeString()}] INFO  Processing 3 contracts…`,
+    `[${new Date().toLocaleTimeString()}] INFO  Writing output file…`,
+    `[${new Date().toLocaleTimeString()}] INFO  Logging run to registry…`,
+    `[${new Date().toLocaleTimeString()}] INFO  ✓ Service completed in ${Math.floor(Math.random()*2000+200)} ms`,
+  ];
+  content.innerHTML = '';
+  let i = 0;
+  const interval = setInterval(() => {
+    if (i < lines.length) {
+      const div = document.createElement('div');
+      div.textContent = lines[i++];
+      div.style.color = lines[i-1].includes('✓') ? '#16A34A' : '#334155';
+      content.appendChild(div);
+      content.scrollTop = content.scrollHeight;
+    } else {
+      clearInterval(interval);
+      btn.textContent = '✓ Done';
+      btn.style.background = '#16A34A';
+      setTimeout(() => { btn.textContent = originalText; btn.disabled = false; btn.style.background = ''; }, 2000);
+    }
+  }, 400);
+}
+
+function runAll() {
+  document.querySelectorAll('.btn-run').forEach((btn, i) => {
+    setTimeout(() => btn.click(), i * 600);
+  });
+}
+
+// ── HISTORY TABLE ──
+const SERVICES = ['folder-creator','timesheet-prefill','belspo-extractor','handover-generator','galileo-reporter','web-scraper','pdf-timesheet-extractor','client-onboarding-generator'];
+const CLIENTS = ['Agfa-Gevaert','Solvay SA','UCB Pharma','Bekaert NV','IBA Group','Proximus','Umicore','Engie Belgium','Barco NV','ArcelorMittal'];
+const STATUSES = ['success','success','success','success','failed'];
+
+function buildHistoryTable() {
+  const tbody = document.getElementById('history-tbody');
+  if (tbody.children.length > 0) return;
+  const now = new Date('2026-05-11T15:00:00');
+  for (let i = 0; i < 20; i++) {
+    const svc = SERVICES[i % SERVICES.length];
+    const client = CLIENTS[Math.floor(Math.random() * CLIENTS.length)];
+    const status = STATUSES[Math.floor(Math.random() * STATUSES.length)];
+    const dur = Math.floor(Math.random() * 3000 + 200);
+    const dt = new Date(now - i * 3600000 * Math.random() * 4);
+    const runId = Math.random().toString(36).substr(2,4) + '…' + Math.random().toString(36).substr(2,4);
+    const statusBadge = status === 'success'
+      ? '<span class="badge badge-success"><span class="badge-dot"></span>Success</span>'
+      : '<span class="badge badge-failed"><span class="badge-dot"></span>Failed</span>';
+    const output = status === 'success' ? `<a href="#" style="color:#1565C0;font-size:12px">📊 Open</a>` : '—';
+    tbody.innerHTML += `<tr>
+      <td class="mono">${runId}</td>
+      <td><strong>${svc}</strong></td>
+      <td>${client}</td>
+      <td>${statusBadge}</td>
+      <td>${dur} ms</td>
+      <td>${output}</td>
+      <td>${dt.toLocaleString('fr-BE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
+    </tr>`;
+  }
+}
+
+// ── DASHBOARD CHARTS ──
+let dashCharts = {};
+function buildDashboardCharts() {
+  if (dashCharts.runs) return;
+
+  const labels = [];
+  const data = [];
+  const base = new Date('2026-05-11');
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(base); d.setDate(d.getDate() - i);
+    labels.push(d.toLocaleDateString('en', {day:'numeric',month:'short'}));
+    data.push(Math.floor(Math.random() * 14 + 3));
+  }
+
+  dashCharts.runs = new Chart(document.getElementById('runsChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Runs',
+        data,
+        backgroundColor: 'rgba(0,51,102,0.75)',
+        borderRadius: 5,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+        y: { grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } }, beginAtZero: true }
+      }
+    }
+  });
+
+  dashCharts.svc = new Chart(document.getElementById('serviceChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Folder Creator','Timesheet','Belspo','Handover','Galileo','Scraper','PDF','Onboarding'],
+      datasets: [{
+        data: [28,22,18,14,8,24,17,11],
+        backgroundColor: ['#003366','#1565C0','#1976D2','#1E88E5','#42A5F5','#64B5F6','#90CAF9','#BBDEFB'],
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '65%',
+      plugins: {
+        legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } }
+      }
+    }
+  });
+}
+
+// ── MONITORING CHARTS ──
+let monCharts = {};
+function buildMonitoringCharts() {
+  if (monCharts.success) return;
+  const short = ['Folder','Timesheet','Belspo','Handover','Galileo','Scraper','PDF','Onboarding'];
+  const rates = [100,97,95,100,88,96,71,100];
+  const durations = [234,1420,890,560,670,3200,302,410];
+
+  const colors = rates.map(r => r >= 95 ? '#16A34A' : r >= 80 ? '#D97706' : '#DC2626');
+
+  monCharts.success = new Chart(document.getElementById('successChart'), {
+    type: 'bar',
+    data: {
+      labels: short,
+      datasets: [{ label: 'Success %', data: rates, backgroundColor: colors, borderRadius: 5, borderSkipped: false }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: { min: 0, max: 100, grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 }, callback: v => v + '%' } }
+      }
+    }
+  });
+
+  monCharts.dur = new Chart(document.getElementById('durationChart'), {
+    type: 'bar',
+    data: {
+      labels: short,
+      datasets: [{ label: 'Avg ms', data: durations, backgroundColor: 'rgba(21,101,192,0.7)', borderRadius: 5, borderSkipped: false }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: { grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 }, callback: v => v + 'ms' } }
+      }
+    }
+  });
+}
+
+// ── INIT ──
+buildDashboardCharts();
+</script>
+</body>
+</html>

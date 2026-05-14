@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 15s       # how often Prometheus pulls metrics
+  evaluation_interval: 15s   # how often alerting rules are evaluated
+
+scrape_configs:
+
+  # Prometheus scrapes itself (useful for pipeline health meta-monitoring)
+  - job_name: prometheus
+    static_configs:
+      - targets: [localhost:9090]
+
+  # The FastAPI orchestration layer — exposes /metrics via
+  # prometheus-fastapi-instrumentator + our custom leyton_* metrics
+  - job_name: leyton-api
+    static_configs:
+      - targets: [api:8000]
+    metrics_path: /metrics

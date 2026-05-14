@@ -1,0 +1,358 @@
+{
+  "annotations": { "list": [] },
+  "description": "Leyton Automation Platform — real-time service monitoring",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["leyton", "automation", "devops"],
+  "time": { "from": "now-24h", "to": "now" },
+  "timezone": "browser",
+  "title": "Leyton Automation Platform",
+  "uid": "leyton-automation-v1",
+  "version": 1,
+  "panels": [
+
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total Service Runs",
+      "description": "All-time count of service executions recorded by the API.",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(leyton_service_runs_total) or vector(0)",
+          "instant": true,
+          "legendFormat": "Total runs"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "blue", "value": null }]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Success Rate",
+      "description": "Percentage of completed runs vs total runs.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(leyton_service_runs_total{status='completed'}) / sum(leyton_service_runs_total) * 100 or vector(0)",
+          "instant": true,
+          "legendFormat": "Success %"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "orange", "value": 70   },
+              { "color": "green",  "value": 90   }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Currently Running",
+      "description": "Services executing right now.",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "leyton_services_currently_running or vector(0)",
+          "instant": true,
+          "legendFormat": "Running"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 2   },
+              { "color": "red",    "value": 4   }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Avg Duration (P50)",
+      "description": "Median service execution time across all services.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(leyton_service_duration_seconds_bucket[1h]))) or vector(0)",
+          "instant": true,
+          "legendFormat": "P50"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 5    },
+              { "color": "red",    "value": 30   }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Service Runs Over Time",
+      "description": "Number of service executions per 5-minute window, broken down by service.",
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (service) (increase(leyton_service_runs_total[$__rate_interval]))",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "spanNulls": false
+          },
+          "unit": "short"
+        }
+      }
+    },
+
+    {
+      "id": 6,
+      "type": "piechart",
+      "title": "Run Outcomes",
+      "description": "Distribution of completed vs failed runs.",
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (status) (leyton_service_runs_total) or vector(0)",
+          "instant": true,
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "options": {
+        "pieType": "donut",
+        "displayLabels": ["name", "percent"],
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] }
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "completed" }, "properties": [{ "id": "color", "value": { "fixedColor": "#73BF69", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "failed"    }, "properties": [{ "id": "color", "value": { "fixedColor": "#F2495C", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "timeout"   }, "properties": [{ "id": "color", "value": { "fixedColor": "#FF9830", "mode": "fixed" } }] }
+        ]
+      }
+    },
+
+    {
+      "id": 7,
+      "type": "bargauge",
+      "title": "Total Runs by Service",
+      "description": "All-time run count per service.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sort_desc(sum by (service) (leyton_service_runs_total))",
+          "instant": true,
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showUnfilled": true,
+        "valueMode": "color"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "continuous-BlPu" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "blue", "value": null }]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 8,
+      "type": "bargauge",
+      "title": "Success Rate by Service",
+      "description": "Per-service success percentage. Red = needs attention.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (service) (leyton_service_runs_total{status='completed'}) / sum by (service) (leyton_service_runs_total) * 100",
+          "instant": true,
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showUnfilled": true,
+        "minVizWidth": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "orange", "value": 70   },
+              { "color": "green",  "value": 90   }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Service Duration Percentiles (P50 / P95 / P99)",
+      "description": "How long services take. P95 and P99 reveal outliers invisible in averages.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, service) (rate(leyton_service_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "P50 — {{service}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, service) (rate(leyton_service_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "P95 — {{service}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, service) (rate(leyton_service_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "P99 — {{service}}"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2, "fillOpacity": 0, "spanNulls": false }
+        }
+      }
+    },
+
+    {
+      "id": 10,
+      "type": "logs",
+      "title": "Live Service Logs",
+      "description": "Structured JSON logs from all services, aggregated by Loki + Promtail.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 29 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "{service=~\".+\"} | json",
+          "legendFormat": "",
+          "queryType": "range",
+          "maxLines": 200
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      }
+    }
+
+  ]
+}
