@@ -1,0 +1,15 @@
+{
+  "name": "timesheet-consolidator",
+  "version": "1.0.0",
+  "description": "Upload one or more PDF or Excel timesheets and get back a single consolidated pivot table of R&D hours per employee per month.",
+  "icon": "fas fa-table",
+  "tags": ["timesheet", "consolidation", "reporting"],
+  "input_type": "files",
+  "timeout": 120,
+  "accept": ".xlsx,.xls,.pdf",
+  "fields": [],
+  "output": {
+    "type": "xlsx",
+    "description": "Consolidated R&D hours pivot table"
+  }
+}

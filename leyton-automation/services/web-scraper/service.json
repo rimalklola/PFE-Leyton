@@ -1,0 +1,14 @@
+{
+  "name": "web-scraper",
+  "version": "1.0.0",
+  "description": "Paste a list of client URLs (one per line) and get back a compiled Excel file with company info, R&D keywords, and technologies extracted from each page.",
+  "icon": "fas fa-globe",
+  "tags": ["research", "scraping", "client-profiling"],
+  "input_type": "urls",
+  "timeout": 180,
+  "fields": [],
+  "output": {
+    "type": "xlsx",
+    "description": "Company profiles with R&D keyword analysis"
+  }
+}

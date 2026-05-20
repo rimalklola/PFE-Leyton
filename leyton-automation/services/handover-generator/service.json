@@ -1,0 +1,29 @@
+{
+  "name": "handover-generator",
+  "version": "1.0.0",
+  "description": "Fill in mission details and get a structured handover document ready to pass to the incoming consultant.",
+  "icon": "fas fa-handshake",
+  "tags": ["handover", "document", "mission"],
+  "input_type": "form",
+  "timeout": 60,
+  "fields": [
+    { "name": "client_name",         "label": "Client Name",          "type": "text",     "required": true,  "placeholder": "e.g. Acme Industries" },
+    { "name": "outgoing_consultant", "label": "Outgoing Consultant",  "type": "text",     "required": true,  "placeholder": "Full name" },
+    { "name": "incoming_consultant", "label": "Incoming Consultant",  "type": "text",     "required": true,  "placeholder": "Full name" },
+    { "name": "mission_type",        "label": "Mission Type",         "type": "select",   "required": true,
+      "options": ["CIR", "BELSPO", "CII", "JEI", "Other"] },
+    { "name": "mission_start",       "label": "Mission Start Date",   "type": "date",     "required": false },
+    { "name": "active_projects",     "label": "Active Projects",      "type": "textarea", "required": false,
+      "placeholder": "Project 1 — status\nProject 2 — status" },
+    { "name": "key_contacts",        "label": "Key Client Contacts",  "type": "textarea", "required": false,
+      "placeholder": "Name, role, email" },
+    { "name": "pending_tasks",       "label": "Pending Tasks",        "type": "textarea", "required": false,
+      "placeholder": "Task 1\nTask 2" },
+    { "name": "notes",               "label": "Important Notes",      "type": "textarea", "required": false,
+      "placeholder": "Anything the incoming consultant must know" }
+  ],
+  "output": {
+    "type": "xlsx",
+    "description": "Structured handover document"
+  }
+}
