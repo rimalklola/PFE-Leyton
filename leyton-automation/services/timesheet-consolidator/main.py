@@ -48,25 +48,114 @@ def normalize_month(value: str):
     return MONTH_ALIASES.get(v)
 
 
+_COL_ALIASES = {
+    "employee": [
+        "employee", "name", "nom", "collaborateur", "collaboratrice",
+        "employe", "employé", "prénom nom", "prenom nom", "full name",
+        "consultant", "researcher", "chercheur", "staff", "worker",
+    ],
+    "month": [
+        "month", "mois", "période", "periode", "period", "date",
+    ],
+    "hours": [
+        "hours", "heures", "total hours", "total heures", "hrs",
+        "total", "worked hours", "heures travaillées", "heure",
+        "rd hours", "r&d hours", "heures rd", "heures r&d",
+    ],
+    "rd_percentage": [
+        "rd_percentage", "rd percentage", "rd%", "r&d%", "r&d percentage",
+        "taux rd", "taux r&d", "pourcentage rd", "pourcentage r&d",
+        "% rd", "% r&d", "pct", "pct rd", "ratio", "ratio rd",
+    ],
+}
+
+
+def _resolve_column(header_map: dict, canonical: str) -> str | None:
+    """Return the actual header key that maps to the canonical column name."""
+    for alias in _COL_ALIASES.get(canonical, [canonical]):
+        if alias in header_map:
+            return alias
+    return None
+
+
 def extract_from_excel(filepath: str) -> list:
     """
-    Reads an Excel timesheet with columns:
-    Employee | Month | Hours | RD_Percentage (optional)
+    Reads an Excel timesheet. Accepts flexible column naming via aliases.
+    Core columns: Employee | Month | Hours
+    Optional: RD_Percentage (defaults to 1.0 = 100%)
     Returns list of row dicts.
     """
     rows = []
     wb = openpyxl.load_workbook(filepath, data_only=True)
-    ws = wb.active
 
-    headers = {}
-    for col, cell in enumerate(ws[1], 1):
-        if cell.value:
-            headers[str(cell.value).strip().lower()] = col
+    # Try every sheet, use the first one that has recognisable columns
+    for ws in wb.worksheets:
+        # Find header row — scan up to row 10 to skip logo/title rows
+        header_row_idx = None
+        headers = {}
+        for r_idx in range(1, min(11, ws.max_row + 1)):
+            candidate = {}
+            for col, cell in enumerate(ws[r_idx], 1):
+                if cell.value:
+                    candidate[str(cell.value).strip().lower()] = col
+            if _resolve_column(candidate, "employee") and _resolve_column(candidate, "hours"):
+                headers = candidate
+                header_row_idx = r_idx
+                break
 
-    required = {"employee", "month", "hours"}
-    if not required.issubset(set(headers.keys())):
-        missing = required - set(headers.keys())
-        raise ValueError(f"Excel missing required columns: {missing}")
+        if not headers:
+            continue  # try next sheet
+
+        emp_key   = _resolve_column(headers, "employee")
+        month_key = _resolve_column(headers, "month")
+        hours_key = _resolve_column(headers, "hours")
+        rd_key    = _resolve_column(headers, "rd_percentage")
+
+        if not emp_key or not hours_key:
+            continue
+
+        for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
+            emp   = row[headers[emp_key] - 1]
+            hours = row[headers[hours_key] - 1]
+            month = row[headers[month_key] - 1] if month_key else None
+            rd_pct = row[headers[rd_key] - 1] if rd_key else None
+
+            if not emp or hours is None:
+                continue
+
+            # If no month column, try to get month from the column header itself
+            # (some sheets have one column per month)
+            month_norm = normalize_month(str(month)) if month else None
+            if not month_norm:
+                # Last resort: skip row (month is required for pivot)
+                continue
+
+            try:
+                rows.append({
+                    "employee": str(emp).strip(),
+                    "month": month_norm,
+                    "hours": float(hours),
+                    "rd_percentage": float(rd_pct) if rd_pct is not None else 1.0,
+                })
+            except (ValueError, TypeError):
+                continue
+
+        if rows:
+            return rows  # found data in this sheet
+
+    # If still no rows found from any sheet using alias matching,
+    # fall back to wide-format detection (one column per month)
+    wb2 = openpyxl.load_workbook(filepath, data_only=True)
+    for ws in wb2.worksheets:
+        rows = _extract_wide_format(ws)
+        if rows:
+            return rows
+
+    raise ValueError(
+        f"Could not find timesheet data in '{os.path.basename(filepath)}'. "
+        "Expected columns: Employee/Nom + Month/Mois + Hours/Heures "
+        "(column names may be in French or English)."
+    )
 
     for row in ws.iter_rows(min_row=2, values_only=True):
         emp = row[headers["employee"] - 1]
@@ -94,12 +183,80 @@ def extract_from_excel(filepath: str) -> list:
     return rows
 
 
+def _extract_wide_format(ws) -> list:
+    """
+    Handles wide-format timesheets where each month is its own column:
+    Employee | January | February | ... | December | RD%
+    """
+    rows = []
+    for r_idx in range(1, min(11, ws.max_row + 1)):
+        headers = {}
+        for col, cell in enumerate(ws[r_idx], 1):
+            if cell.value:
+                key = str(cell.value).strip().lower()
+                headers[key] = col
+
+        # Check if any header matches a month name
+        month_cols = {m: headers[m] for m in MONTHS if m in headers}
+        # Also check aliases like "jan", "feb"
+        for alias, canonical in MONTH_ALIASES.items():
+            if alias in headers and canonical not in month_cols:
+                month_cols[canonical] = headers[alias]
+
+        if not month_cols:
+            continue
+
+        emp_key = _resolve_column(headers, "employee")
+        rd_key  = _resolve_column(headers, "rd_percentage")
+        if not emp_key:
+            continue
+
+        for row in ws.iter_rows(min_row=r_idx + 1, values_only=True):
+            emp = row[headers[emp_key] - 1]
+            if not emp:
+                continue
+            rd_pct_raw = row[headers[rd_key] - 1] if rd_key else None
+            try:
+                rd_pct = float(rd_pct_raw) if rd_pct_raw is not None else 1.0
+                # Some sheets store as percentage (e.g. 80 instead of 0.8)
+                if rd_pct > 1.0:
+                    rd_pct = rd_pct / 100.0
+            except (ValueError, TypeError):
+                rd_pct = 1.0
+
+            for month, col_idx in month_cols.items():
+                val = row[col_idx - 1]
+                if val is None:
+                    continue
+                try:
+                    hours = float(val)
+                    if hours <= 0:
+                        continue
+                    rows.append({
+                        "employee": str(emp).strip(),
+                        "month": month,
+                        "hours": hours,
+                        "rd_percentage": rd_pct,
+                    })
+                except (ValueError, TypeError):
+                    continue
+
+        if rows:
+            return rows
+
+    return rows
+
+
 def extract_from_pdf(filepath: str) -> list:
     """
-    Reads a PDF timesheet table with columns:
+    Reads a PDF timesheet table with flexible column naming (FR/EN aliases).
     Employee | Month | Hours | RD_Percentage (optional)
     """
     rows = []
+    emp_triggers = set()
+    for aliases in _COL_ALIASES["employee"]:
+        emp_triggers.add(aliases)
+
     with pdfplumber.open(filepath) as pdf:
         for page in pdf.pages:
             table = page.extract_table()
@@ -109,26 +266,33 @@ def extract_from_pdf(filepath: str) -> list:
             header_row = None
             data_start = 0
             for i, row in enumerate(table):
-                if any(cell and "employee" in str(cell).lower() for cell in row):
-                    header_row = [str(c).strip().lower() if c else "" for c in row]
+                cells_lower = [str(c).strip().lower() if c else "" for c in row]
+                if any(c in emp_triggers for c in cells_lower):
+                    header_row = cells_lower
                     data_start = i + 1
                     break
 
             if not header_row:
                 continue
 
-            col = {h: i for i, h in enumerate(header_row)}
-            if "employee" not in col or "month" not in col or "hours" not in col:
+            col_idx = {h: i for i, h in enumerate(header_row)}
+            emp_key   = _resolve_column(col_idx, "employee")
+            month_key = _resolve_column(col_idx, "month")
+            hours_key = _resolve_column(col_idx, "hours")
+            rd_key    = _resolve_column(col_idx, "rd_percentage")
+
+            if not emp_key or not hours_key:
                 continue
 
             for row in table[data_start:]:
                 if not any(row):
                     continue
                 try:
-                    emp = str(row[col["employee"]]).strip()
-                    month_norm = normalize_month(str(row[col["month"]]))
-                    hours = float(row[col["hours"]])
-                    rd_pct = float(row[col["rd_percentage"]]) if "rd_percentage" in col else 1.0
+                    emp   = str(row[col_idx[emp_key]]).strip()
+                    hours = float(row[col_idx[hours_key]])
+                    month_raw = str(row[col_idx[month_key]]) if month_key else ""
+                    month_norm = normalize_month(month_raw)
+                    rd_pct = float(row[col_idx[rd_key]]) if rd_key else 1.0
                     if emp and month_norm:
                         rows.append({
                             "employee": emp,

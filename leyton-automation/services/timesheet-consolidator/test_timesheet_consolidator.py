@@ -76,7 +76,7 @@ def test_extract_from_excel_skips_empty_rows(tmp_path):
 
 def test_extract_from_excel_missing_columns_raises(tmp_path):
     path = make_excel_fixture(tmp_path, [("Alice", 40)], headers=["Employee", "Hours"])
-    with pytest.raises(ValueError, match="missing required columns"):
+    with pytest.raises(ValueError, match="Could not find timesheet data"):
         main.extract_from_excel(path)
 
 def test_extract_from_excel_no_rd_percentage_defaults_to_1(tmp_path):
