@@ -6,6 +6,7 @@ WORKDIR /app
 # so all paths below are relative to the project root.
 COPY api/requirements.txt .
 COPY api/main.py .
+COPY api/templates ./templates
 
 # Copy the services tree so the API can subprocess-call each service
 # and so shared/ (registry + logger) is importable at /app/services/shared/
