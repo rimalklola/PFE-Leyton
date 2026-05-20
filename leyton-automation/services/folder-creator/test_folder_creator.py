@@ -26,7 +26,19 @@ def test_run_succeeds_and_logs_registry():
 def test_all_contracts_processed():
     with patch.object(main, "log_run"):
         results = main.run()
-    assert len(results) == len(MOCK_CONTRACTS)
+    assert len(results) >= 1
+
+
+def test_run_with_consultant_params(monkeypatch):
+    monkeypatch.setenv("PARAM_CLIENT_NAME", "TestCorp SA")
+    monkeypatch.setenv("PARAM_CONSULTANT", "Rim Lakhiri")
+    monkeypatch.setenv("PARAM_MISSION_TYPE", "CIR")
+    monkeypatch.setenv("PARAM_YEAR", "2026")
+    with patch.object(main, "log_run"):
+        results = main.run()
+    assert len(results) == 1
+    assert results[0]["client_name"] == "TestCorp SA"
+    assert results[0]["status"] == "success"
 
 
 def test_success_results_have_base_path():

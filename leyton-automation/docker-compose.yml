@@ -42,22 +42,13 @@ services:
     networks: [app-net]
     restart: "no"
 
-  timesheet-prefill:
+  timesheet-consolidator:
     build:
       context: ./services
-      dockerfile: timesheet-prefill/Dockerfile
+      dockerfile: timesheet-consolidator/Dockerfile
     volumes:
-      - ./services/timesheet-prefill/output:/app/output
-      - ./runs.db:/app/runs.db
-    networks: [app-net]
-    restart: "no"
-
-  belspo-extractor:
-    build:
-      context: ./services
-      dockerfile: belspo-extractor/Dockerfile
-    volumes:
-      - ./services/belspo-extractor/output:/app/output
+      - ./services/timesheet-consolidator/output:/app/output
+      - ./services/timesheet-consolidator/uploads:/app/uploads
       - ./runs.db:/app/runs.db
     networks: [app-net]
     restart: "no"
@@ -72,42 +63,12 @@ services:
     networks: [app-net]
     restart: "no"
 
-  galileo-reporter:
-    build:
-      context: ./services
-      dockerfile: galileo-reporter/Dockerfile
-    volumes:
-      - ./services/galileo-reporter/output:/app/output
-      - ./runs.db:/app/runs.db
-    networks: [app-net]
-    restart: "no"
-
   web-scraper:
     build:
       context: ./services
       dockerfile: web-scraper/Dockerfile
     volumes:
       - ./services/web-scraper/output:/app/output
-      - ./runs.db:/app/runs.db
-    networks: [app-net]
-    restart: "no"
-
-  pdf-timesheet-extractor:
-    build:
-      context: ./services
-      dockerfile: pdf-timesheet-extractor/Dockerfile
-    volumes:
-      - ./services/pdf-timesheet-extractor/output:/app/output
-      - ./runs.db:/app/runs.db
-    networks: [app-net]
-    restart: "no"
-
-  client-onboarding-generator:
-    build:
-      context: ./services
-      dockerfile: client-onboarding-generator/Dockerfile
-    volumes:
-      - ./services/client-onboarding-generator/output:/app/output
       - ./runs.db:/app/runs.db
     networks: [app-net]
     restart: "no"

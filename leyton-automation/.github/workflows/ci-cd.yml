@@ -28,13 +28,9 @@ jobs:
       matrix:
         service:
           - folder-creator
-          - timesheet-prefill
-          - belspo-extractor
+          - timesheet-consolidator
           - handover-generator
-          - galileo-reporter
           - web-scraper
-          - pdf-timesheet-extractor
-          - client-onboarding-generator
 
     steps:
       - uses: actions/checkout@v4
@@ -58,9 +54,7 @@ jobs:
   # Purpose : detect known vulnerabilities before code reaches production.
   # Tools   :
   #   • Bandit  — static analysis for common Python security issues
-  #               (SQL injection, hardcoded passwords, unsafe deserialization…)
   #   • pip-audit — checks every dependency against the OSV / PyPI Advisory DB
-  # Severity : Bandit flags MEDIUM and HIGH only (-ll flag).
   # ══════════════════════════════════════════
   security:
     name: "Security [${{ matrix.service }}]"
@@ -70,13 +64,9 @@ jobs:
       matrix:
         service:
           - folder-creator
-          - timesheet-prefill
-          - belspo-extractor
+          - timesheet-consolidator
           - handover-generator
-          - galileo-reporter
           - web-scraper
-          - pdf-timesheet-extractor
-          - client-onboarding-generator
 
     steps:
       - uses: actions/checkout@v4
@@ -95,8 +85,6 @@ jobs:
             -ll \
             --format txt \
             --exit-zero
-        # --exit-zero: report findings without failing the pipeline.
-        # Remove it in production when the codebase is clean.
 
       - name: pip-audit — dependency vulnerability scan
         run: |
@@ -109,7 +97,6 @@ jobs:
   # STAGE 3 — TEST + COVERAGE
   # Purpose : verify correctness AND enforce a minimum coverage threshold.
   # Threshold: 80% — the pipeline fails if any service drops below this.
-  # Coverage report is uploaded as an artifact for review after each run.
   # ══════════════════════════════════════════
   test:
     name: "Test [${{ matrix.service }}]"
@@ -119,13 +106,9 @@ jobs:
       matrix:
         service:
           - folder-creator
-          - timesheet-prefill
-          - belspo-extractor
+          - timesheet-consolidator
           - handover-generator
-          - galileo-reporter
           - web-scraper
-          - pdf-timesheet-extractor
-          - client-onboarding-generator
 
     steps:
       - uses: actions/checkout@v4
@@ -161,13 +144,7 @@ jobs:
   # ══════════════════════════════════════════
   # STAGE 4 — BUILD + PUSH
   # Purpose : produce immutable, versioned Docker images.
-  # Registry: GitHub Container Registry (ghcr.io) — free, integrated with
-  #           GitHub Actions, no external account needed.
-  # Tags    :
-  #   • :latest        — always points to the most recent main build
-  #   • :<git-sha>     — immutable, traceable to a specific commit
-  # Caching : GitHub Actions cache (type=gha) reuses unchanged layers,
-  #           reducing build time by 60–80% on subsequent runs.
+  # Tags    : :latest and :<git-sha>
   # Gate    : only runs after lint, security, and test all pass.
   # Push    : only on push to main (not on pull requests).
   # ══════════════════════════════════════════
@@ -183,13 +160,9 @@ jobs:
       matrix:
         service:
           - folder-creator
-          - timesheet-prefill
-          - belspo-extractor
+          - timesheet-consolidator
           - handover-generator
-          - galileo-reporter
           - web-scraper
-          - pdf-timesheet-extractor
-          - client-onboarding-generator
 
     steps:
       - uses: actions/checkout@v4
@@ -225,10 +198,6 @@ jobs:
   # STAGE 5 — DEPLOY TO RAILWAY
   # Purpose : push the freshly built image to the cloud after all quality
   #           gates pass. Only runs on push to main (not PRs).
-  # How     : Railway CLI reads RAILWAY_TOKEN from secrets and deploys the
-  #           service to the production environment.
-  # GitOps  : this stage is what closes the loop — a push to main becomes
-  #           a live deployment with no manual steps.
   # ══════════════════════════════════════════
   deploy:
     name: "Deploy to Railway"
@@ -269,7 +238,6 @@ jobs:
   # ══════════════════════════════════════════
   # STAGE 6 — PIPELINE SUMMARY
   # Purpose : single required status check for branch protection rules.
-  #           Passes only when all quality gates passed.
   # ══════════════════════════════════════════
   pipeline-passed:
     name: "Pipeline passed"

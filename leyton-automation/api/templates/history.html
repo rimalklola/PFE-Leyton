@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}History — Leyton Automation{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h4><i class="fas fa-clock-rotate-left me-2"></i>Execution History</h4>
+    <p>Complete log of all service executions</p>
+</div>
+
+<!-- Filter bar -->
+<div class="card mb-3 p-3">
+    <form method="get" class="row g-2 align-items-end">
+        <div class="col-sm-4">
+            <label class="form-label small text-muted mb-1">Filter by service</label>
+            <select name="service" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">All services</option>
+                {% for s in service_names %}
+                <option value="{{ s }}" {% if s == selected_service %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-4">
+            <label class="form-label small text-muted mb-1">Filter by status</label>
+            <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">All statuses</option>
+                <option value="success" {% if selected_status == 'success' %}selected{% endif %}>Success</option>
+                <option value="failed"  {% if selected_status == 'failed'  %}selected{% endif %}>Failed</option>
+            </select>
+        </div>
+        <div class="col-sm-2">
+            <a href="/ui/history" class="btn btn-sm btn-outline-secondary w-100">
+                <i class="fas fa-rotate-left me-1"></i>Reset
+            </a>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        {% if runs %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">#</th>
+                        <th>Service</th>
+                        <th>Status</th>
+                        <th>Duration</th>
+                        <th>Output File</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for run in runs %}
+                <tr>
+                    <td class="ps-3 text-muted" style="font-size:0.78rem;">{{ run.id }}</td>
+                    <td class="fw-semibold" style="font-size:0.88rem;">{{ run.service_name }}</td>
+                    <td>
+                        {% if run.status == 'success' %}
+                            <span class="badge-success-soft"><i class="fas fa-check me-1"></i>success</span>
+                        {% elif run.status == 'failed' %}
+                            <span class="badge-failed-soft"><i class="fas fa-xmark me-1"></i>failed</span>
+                        {% else %}
+                            <span class="badge-running-soft">{{ run.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:0.85rem;">
+                        {% if run.duration_ms %}
+                            {% if run.duration_ms < 1000 %}{{ run.duration_ms }}ms
+                            {% else %}{{ (run.duration_ms / 1000) | round(1) }}s{% endif %}
+                        {% else %}--{% endif %}
+                    </td>
+                    <td style="font-size:0.8rem; color:#6b7280; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                        {% if run.output_file %}
+                            <i class="fas fa-file-excel me-1" style="color:#10b981;"></i>
+                            {{ run.output_file.split('/')[-1] if '/' in run.output_file else run.output_file.split('\\')[-1] }}
+                        {% elif run.error_message %}
+                            <i class="fas fa-circle-exclamation me-1" style="color:#ef4444;"></i>
+                            <span title="{{ run.error_message }}">{{ run.error_message[:60] }}...</span>
+                        {% else %}--{% endif %}
+                    </td>
+                    <td class="text-muted" style="font-size:0.82rem;">{{ run.ran_at[:16] if run.ran_at else '--' }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="fas fa-clock-rotate-left fa-2x mb-2 d-block" style="color:#cbd5e1;"></i>
+            No runs recorded yet. <a href="/ui/services">Run a service</a> to populate the history.
+        </div>
+        {% endif %}
+    </div>
+    {% if runs %}
+    <div class="card-footer bg-transparent text-muted" style="font-size:0.82rem;">
+        Showing {{ runs|length }} run(s)
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -226,6 +226,59 @@ def generate_handover(data: dict) -> str:
     return filepath
 
 
+def _build_from_params() -> dict:
+    """Build handover data dict from consultant-provided env vars."""
+    g = lambda k, d="—": os.environ.get(f"PARAM_{k.upper()}", d)
+    return {
+        "account_name": g("CLIENT_NAME", "Unknown Client"),
+        "team": {
+            "ho_done_with":   g("OUTGOING_CONSULTANT"),
+            "tax_consultant": g("INCOMING_CONSULTANT"),
+            "sales":          g("SALES_CONTACT", "—"),
+        },
+        "company_info": {
+            "sector":                 g("SECTOR", "—"),
+            "type":                   g("COMPANY_TYPE", "—"),
+            "account_history":        g("ACCOUNT_HISTORY", "—"),
+            "belspo_vat":             g("BELSPO_VAT", "—"),
+            "belspo_password":        g("BELSPO_PASSWORD", "—"),
+            "belspo_notification":    g("BELSPO_NOTIFICATION", "—"),
+            "previous_control":       g("PREVIOUS_CONTROL", "—"),
+        },
+        "contract_info": {
+            "tax_measure":          g("MISSION_TYPE"),
+            "expected_year":        g("MISSION_START", str(datetime.now().year)),
+            "remuneration_system":  g("REMUNERATION_SYSTEM", "—"),
+            "gdpr":                 g("GDPR", "—"),
+        },
+        "pocs": {
+            "technical_contact": g("KEY_CONTACTS", "—"),
+            "hr_contact":        "—",
+            "social_secretary":  "—",
+        },
+        "previous_mission": {
+            "technical_report":              "—",
+            "timesheets":                    "—",
+            "nbr_projects":                  "—",
+            "nbr_eligible_employees":        "—",
+            "structural_research_certificate": "—",
+            "mission_status":                "Active",
+            "control":                       "—",
+            "general_comments":              g("NOTES", "—"),
+            "next_step":                     g("PENDING_TASKS", "—"),
+            "introduction_email":            "—",
+        },
+        "belspo_notifications": [],
+        "employees": [],
+        "data_checklist": {
+            "calculation_sheets": False,
+            "control_documents":  False,
+            "diplomas":           False,
+            "individual_accounts": False,
+        },
+    }
+
+
 def run():
     log = ServiceLogger("handover-generator")
     start = time.time()
@@ -233,13 +286,24 @@ def run():
 
     filepaths = []
     try:
-        for data in MOCK_HANDOVER_DATA:
+        # Use real consultant input if provided, otherwise fall back to mock data
+        if os.environ.get("PARAM_CLIENT_NAME"):
+            log.info("Running with consultant-provided parameters")
+            data = _build_from_params()
             filepath = generate_handover(data)
             filepaths.append(filepath)
             log.info("Handover generated", account=data["account_name"], output_file=filepath)
+        else:
+            log.info("Running in demo mode with mock data")
+            for data in MOCK_HANDOVER_DATA:
+                filepath = generate_handover(data)
+                filepaths.append(filepath)
+                log.info("Handover generated", account=data["account_name"], output_file=filepath)
 
         duration_ms = int((time.time() - start) * 1000)
-        log_run("handover-generator", status="success", duration_ms=duration_ms)
+        log_run("handover-generator", status="success",
+                output_file=filepaths[-1] if filepaths else None,
+                duration_ms=duration_ms)
         log.info("Service completed", generated=len(filepaths), duration_ms=duration_ms)
 
     except Exception as exc:

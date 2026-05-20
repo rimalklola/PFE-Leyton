@@ -80,6 +80,28 @@ def create_client_folder(contract: dict) -> dict:
         }
 
 
+def _contract_from_params() -> dict:
+    """Build a contract dict from consultant-provided env vars."""
+    g = lambda k, d="": os.environ.get(f"PARAM_{k.upper()}", d)
+    return {
+        "contract_id": f"CTR-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        "signed_date": datetime.now().strftime("%Y-%m-%d"),
+        "client": {
+            "name":          g("CLIENT_NAME", "New Client"),
+            "id":            f"CLI-{datetime.now().strftime('%Y%m%d')}",
+            "contact_name":  g("CONTACT_NAME", "—"),
+            "contact_email": g("CONTACT_EMAIL", "—"),
+            "country":       g("COUNTRY", "Belgium"),
+        },
+        "mission": {
+            "type":       g("MISSION_TYPE", "Belspo"),
+            "year":       int(g("YEAR", str(datetime.now().year))),
+            "consultant": g("CONSULTANT", "—"),
+            "status":     "active",
+        },
+    }
+
+
 def run():
     log = ServiceLogger("folder-creator")
     start = time.time()
@@ -87,7 +109,15 @@ def run():
 
     results = []
     try:
-        for contract in MOCK_CONTRACTS:
+        # Use real params if provided, otherwise demo with first mock contract
+        if os.environ.get("PARAM_CLIENT_NAME"):
+            contracts = [_contract_from_params()]
+            log.info("Running with consultant-provided parameters")
+        else:
+            contracts = MOCK_CONTRACTS[:1]
+            log.info("Running in demo mode with mock data")
+
+        for contract in contracts:
             result = create_client_folder(contract)
             results.append(result)
             if result["status"] == "success":
@@ -99,7 +129,9 @@ def run():
 
         ok = len([r for r in results if r["status"] == "success"])
         duration_ms = int((time.time() - start) * 1000)
-        log_run("folder-creator", status="success", duration_ms=duration_ms)
+        output_file = results[0].get("base_path") if results else None
+        log_run("folder-creator", status="success",
+                output_file=output_file, duration_ms=duration_ms)
         log.info("Service completed", processed=len(results), ok=ok, duration_ms=duration_ms)
 
     except Exception as exc:

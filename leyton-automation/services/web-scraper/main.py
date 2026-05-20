@@ -208,6 +208,25 @@ def export_to_excel(profiles, filepath):
     wb.save(filepath)
 
 
+def _clients_from_params() -> list:
+    """Parse PARAM_URLS env var into a list of client dicts."""
+    raw = os.environ.get("PARAM_URLS", "").strip()
+    clients = []
+    for line in raw.splitlines():
+        url = line.strip()
+        if not url:
+            continue
+        # Derive a display name from the domain
+        try:
+            from urllib.parse import urlparse
+            domain = urlparse(url).netloc or url
+            name = domain.replace("www.", "").split(".")[0].capitalize()
+        except Exception:
+            name = url[:30]
+        clients.append({"name": name, "url": url})
+    return clients
+
+
 def run():
     log = ServiceLogger("web-scraper")
     start = time.time()
@@ -215,9 +234,17 @@ def run():
 
     os.makedirs(OUTPUT_PATH, exist_ok=True)
 
+    # Use real URLs if provided by the consultant, otherwise fall back to mock
+    if os.environ.get("PARAM_URLS", "").strip():
+        clients = _clients_from_params()
+        log.info("Running with consultant-provided URLs", count=len(clients))
+    else:
+        clients = MOCK_CLIENTS
+        log.info("Running in demo mode with mock clients")
+
     profiles = []
     try:
-        for client in MOCK_CLIENTS:
+        for client in clients:
             log.info("Scraping client", client=client["name"], url=client["url"])
             profile = scrape_client(client)
             profiles.append(profile)

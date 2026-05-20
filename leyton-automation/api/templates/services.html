@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Services — Leyton Automation{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h4><i class="fas fa-play-circle me-2"></i>Automation Services</h4>
+    <p>Select a service, fill in the details, and download your file</p>
+</div>
+
+<div class="row g-3">
+{% for svc in services %}
+<div class="col-md-6">
+    <div class="card service-card h-100 p-3" onclick="openModal('{{ svc.key }}')">
+        <div class="d-flex align-items-start gap-3 mb-3">
+            <div class="service-icon">
+                <i class="{{ svc.icon }}"></i>
+            </div>
+            <div class="flex-grow-1">
+                <div class="fw-bold" style="font-size:1rem;">{{ svc.title }}</div>
+                {% if svc.last_status == 'success' %}
+                    <span class="badge-success-soft mt-1 d-inline-block">Last run: OK</span>
+                {% elif svc.last_status == 'failed' %}
+                    <span class="badge-failed-soft mt-1 d-inline-block">Last run: Failed</span>
+                {% else %}
+                    <span class="badge-never-soft mt-1 d-inline-block">Never run</span>
+                {% endif %}
+            </div>
+        </div>
+        <p class="text-muted mb-3" style="font-size:0.85rem; line-height:1.6;">{{ svc.description }}</p>
+        <div class="mt-auto d-flex justify-content-between align-items-center">
+            <small class="text-muted"><i class="fas fa-file-export me-1"></i>{{ svc.output }}</small>
+            <button class="btn btn-sm fw-semibold"
+                style="background:var(--leyton-blue); color:#fff; border-radius:8px; padding:5px 16px;">
+                Run <i class="fas fa-arrow-right ms-1"></i>
+            </button>
+        </div>
+    </div>
+</div>
+{% endfor %}
+</div>
+
+<!-- ── Modal ─────────────────────────────────────────────────── -->
+<div class="modal fade" id="runModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content" style="border-radius:16px; border:none;">
+            <div class="modal-header border-0 pb-0 px-4 pt-4">
+                <div>
+                    <h5 class="modal-title fw-bold mb-1" id="modalTitle"></h5>
+                    <p class="text-muted mb-0" id="modalDesc" style="font-size:0.88rem;"></p>
+                </div>
+                <button type="button" class="btn-close ms-3" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4 pb-4">
+
+                <!-- Result box -->
+                <div id="resultBox" style="display:none;" class="result-box mb-3">
+                    <div id="resultContent"></div>
+                </div>
+
+                <!-- Dynamic input area -->
+                <div id="inputArea" class="mb-3"></div>
+
+                <!-- Action buttons -->
+                <div class="d-flex gap-2">
+                    <button id="runBtn" class="btn fw-semibold px-4"
+                        style="background:var(--leyton-navy); color:#fff; border-radius:10px; padding:0.65rem 1.5rem;"
+                        onclick="submitRun()">
+                        <i class="fas fa-play me-2"></i>Run Service
+                    </button>
+                    <a id="downloadBtn" href="#" style="display:none;"
+                        class="btn fw-semibold px-4"
+                        style="background:#10b981; color:#fff; border-radius:10px; padding:0.65rem 1.5rem;">
+                        <i class="fas fa-download me-2"></i>Download File
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SERVICE_META = {{ service_meta_json | safe }};
+let currentService = null;
+let pollInterval   = null;
+const modal = new bootstrap.Modal(document.getElementById('runModal'));
+
+function openModal(key) {
+    currentService = key;
+    const svc = SERVICE_META[key];
+    document.getElementById('modalTitle').textContent = svc.title;
+    document.getElementById('modalDesc').textContent  = svc.description;
+    document.getElementById('resultBox').style.display = 'none';
+    document.getElementById('downloadBtn').style.display = 'none';
+    const btn = document.getElementById('runBtn');
+    btn.style.display = 'inline-block';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-play me-2"></i>Run Service';
+    renderInputArea(svc);
+    modal.show();
+}
+
+function renderInputArea(svc) {
+    const area = document.getElementById('inputArea');
+    area.innerHTML = '';
+
+    if (svc.input_type === 'form') {
+        const form = document.createElement('form');
+        form.id = 'serviceForm';
+        svc.fields.forEach(f => {
+            const group = document.createElement('div');
+            group.className = 'mb-3';
+            const label = document.createElement('label');
+            label.className = 'form-label fw-semibold';
+            label.style.fontSize = '0.88rem';
+            label.textContent = f.label + (f.required ? ' *' : '');
+            group.appendChild(label);
+
+            let input;
+            if (f.type === 'select') {
+                input = document.createElement('select');
+                input.className = 'form-select form-select-sm';
+                f.options.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o; opt.textContent = o;
+                    input.appendChild(opt);
+                });
+            } else if (f.type === 'textarea') {
+                input = document.createElement('textarea');
+                input.className = 'form-control form-control-sm';
+                input.rows = 3;
+                if (f.placeholder) input.placeholder = f.placeholder;
+            } else {
+                input = document.createElement('input');
+                input.type = f.type;
+                input.className = 'form-control form-control-sm';
+                if (f.placeholder) input.placeholder = f.placeholder;
+            }
+            input.name = f.name;
+            input.required = f.required || false;
+            group.appendChild(input);
+            form.appendChild(group);
+        });
+        area.appendChild(form);
+
+    } else if (svc.input_type === 'files') {
+        area.innerHTML = `
+            <div class="mb-2" style="font-size:0.88rem; font-weight:600;">Upload Timesheet Files</div>
+            <div class="border border-dashed rounded p-4 text-center" style="border-color:#cbd5e1!important; background:#f8fafc;">
+                <i class="fas fa-cloud-upload-alt fa-2x mb-2 d-block" style="color:#94a3b8;"></i>
+                <p class="text-muted mb-2" style="font-size:0.85rem;">PDF or Excel timesheets (one per employee)</p>
+                <input type="file" id="fileInput" multiple accept="${svc.accept}"
+                    class="form-control form-control-sm" style="max-width:320px; margin:0 auto;">
+            </div>
+            <small class="text-muted d-block mt-2">Accepted: .xlsx, .xls, .pdf — multiple files allowed</small>`;
+
+    } else if (svc.input_type === 'file') {
+        area.innerHTML = `
+            <div class="mb-2" style="font-size:0.88rem; font-weight:600;">Upload Client Files</div>
+            <div class="row g-2 mb-3">
+                <div class="col-sm-6">
+                    <label class="form-label" style="font-size:0.82rem;">Client Name *</label>
+                    <input type="text" id="paramClientName" class="form-control form-control-sm"
+                        placeholder="e.g. Acme Industries">
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label" style="font-size:0.82rem;">Mission Type</label>
+                    <select id="paramMissionType" class="form-select form-select-sm">
+                        <option>Belspo</option><option>CIR</option>
+                        <option>CII</option><option>JEI</option>
+                    </select>
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label" style="font-size:0.82rem;">Year</label>
+                    <input type="number" id="paramYear" class="form-control form-control-sm"
+                        value="${new Date().getFullYear()}">
+                </div>
+            </div>
+            <div class="border border-dashed rounded p-3 text-center" style="border-color:#cbd5e1!important; background:#f8fafc;">
+                <i class="fas fa-folder-open fa-2x mb-1 d-block" style="color:#94a3b8;"></i>
+                <p class="text-muted mb-1" style="font-size:0.82rem;">Optionally upload a ZIP of client documents</p>
+                <input type="file" id="fileInput" accept=".zip"
+                    class="form-control form-control-sm" style="max-width:280px; margin:0 auto;">
+            </div>`;
+
+    } else if (svc.input_type === 'urls') {
+        area.innerHTML = `
+            <div class="mb-2" style="font-size:0.88rem; font-weight:600;">URLs to Scrape</div>
+            <textarea id="urlInput" class="form-control" rows="5"
+                placeholder="https://www.example-client.com&#10;https://www.another-company.be&#10;https://www.third-company.com"
+                style="font-size:0.85rem; font-family: monospace;"></textarea>
+            <small class="text-muted d-block mt-1">One URL per line. The service will extract company info, R&D keywords, and technologies from each page.</small>`;
+    }
+}
+
+function showResult(type, html) {
+    const box = document.getElementById('resultBox');
+    box.className = 'result-box mb-3 result-' + type;
+    document.getElementById('resultContent').innerHTML = html;
+    box.style.display = 'block';
+}
+
+async function submitRun() {
+    const btn = document.getElementById('runBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-sm me-2" role="status"></span>Running...';
+    showResult('running', '<i class="fas fa-spinner fa-spin me-2"></i>Service is running, please wait...');
+    document.getElementById('downloadBtn').style.display = 'none';
+
+    const svc = SERVICE_META[currentService];
+    let response;
+
+    try {
+        if (svc.input_type === 'files') {
+            const files = document.getElementById('fileInput').files;
+            if (!files.length) {
+                showResult('error', '<i class="fas fa-circle-xmark me-2"></i>Please select at least one file.');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-play me-2"></i>Run Service';
+                return;
+            }
+            const fd = new FormData();
+            for (const f of files) fd.append('files', f);
+            response = await fetch(`/run/${currentService}/upload`, { method: 'POST', body: fd });
+
+        } else if (svc.input_type === 'file') {
+            const clientName = document.getElementById('paramClientName').value.trim();
+            if (!clientName) {
+                showResult('error', '<i class="fas fa-circle-xmark me-2"></i>Client Name is required.');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-play me-2"></i>Run Service';
+                return;
+            }
+            const fd = new FormData();
+            fd.append('client_name', clientName);
+            fd.append('mission_type', document.getElementById('paramMissionType').value);
+            fd.append('year', document.getElementById('paramYear').value);
+            const fileEl = document.getElementById('fileInput');
+            if (fileEl.files.length) fd.append('files', fileEl.files[0]);
+            response = await fetch(`/run/${currentService}/form`, { method: 'POST', body: fd });
+
+        } else if (svc.input_type === 'urls') {
+            const urls = document.getElementById('urlInput').value.trim();
+            if (!urls) {
+                showResult('error', '<i class="fas fa-circle-xmark me-2"></i>Please enter at least one URL.');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-play me-2"></i>Run Service';
+                return;
+            }
+            const fd = new FormData();
+            fd.append('urls', urls);
+            response = await fetch(`/run/${currentService}/form`, { method: 'POST', body: fd });
+
+        } else if (svc.input_type === 'form') {
+            const form = document.getElementById('serviceForm');
+            if (!form.checkValidity()) { form.reportValidity(); return; }
+            const fd = new FormData(form);
+            response = await fetch(`/run/${currentService}/form`, { method: 'POST', body: fd });
+        }
+
+        const data = await response.json();
+        if (data.run_id) {
+            pollStatus(data.run_id);
+        } else {
+            showResult('error', '<i class="fas fa-circle-xmark me-2"></i>Could not start service.');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-play me-2"></i>Run Service';
+        }
+    } catch (e) {
+        showResult('error', '<i class="fas fa-circle-xmark me-2"></i>Connection error. Is the server running?');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-play me-2"></i>Run Service';
+    }
+}
+
+function pollStatus(runId) {
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(async () => {
+        const data = await fetch('/runs/' + runId).then(r => r.json());
+        if (data.status === 'completed') {
+            clearInterval(pollInterval);
+            showResult('success', '<i class="fas fa-circle-check me-2"></i>Completed successfully. Your file is ready.');
+            const dl = document.getElementById('downloadBtn');
+            dl.href = `/download/${currentService}`;
+            dl.innerHTML = '<i class="fas fa-download me-2"></i>Download File';
+            dl.style.cssText = 'display:inline-block; background:#10b981; color:#fff; border-radius:10px; padding:0.65rem 1.5rem; font-weight:600; text-decoration:none;';
+            document.getElementById('runBtn').style.display = 'none';
+        } else if (data.status === 'failed' || data.status === 'timeout') {
+            clearInterval(pollInterval);
+            const msg = data.error || 'The service encountered an error. Please check your input and try again.';
+            showResult('error', `<i class="fas fa-circle-xmark me-2"></i>${msg}`);
+            const btn = document.getElementById('runBtn');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-rotate-right me-2"></i>Retry';
+        }
+    }, 1200);
+}
+</script>
+{% endblock %}

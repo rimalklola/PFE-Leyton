@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Leyton Automation{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h4><i class="fas fa-gauge-high me-2"></i>Platform Dashboard</h4>
+    <p>Real-time overview of all automation services</p>
+</div>
+
+<!-- Stat cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100 p-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon" style="background:#dbeafe; color:#1d4ed8;">
+                    <i class="fas fa-bolt"></i>
+                </div>
+                <div>
+                    <div class="text-muted" style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.5px;">Total Runs</div>
+                    <div style="font-size:1.8rem; font-weight:700; line-height:1.1;">{{ total_runs }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100 p-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon" style="background:#d1fae5; color:#065f46;">
+                    <i class="fas fa-circle-check"></i>
+                </div>
+                <div>
+                    <div class="text-muted" style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.5px;">Success Rate</div>
+                    <div style="font-size:1.8rem; font-weight:700; line-height:1.1;">{{ success_rate }}%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100 p-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon" style="background:#fef3c7; color:#92400e;">
+                    <i class="fas fa-cubes"></i>
+                </div>
+                <div>
+                    <div class="text-muted" style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.5px;">Services</div>
+                    <div style="font-size:1.8rem; font-weight:700; line-height:1.1;">{{ services_count }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100 p-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon" style="background:#ede9fe; color:#5b21b6;">
+                    <i class="fas fa-triangle-exclamation"></i>
+                </div>
+                <div>
+                    <div class="text-muted" style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.5px;">Failed Runs</div>
+                    <div style="font-size:1.8rem; font-weight:700; line-height:1.1;">{{ failed_runs }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- Recent runs -->
+    <div class="col-xl-8">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 fw-bold">Recent Executions</h6>
+                    <a href="/ui/history" class="btn btn-sm btn-outline-secondary">View all</a>
+                </div>
+                {% if recent_runs %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Service</th>
+                                <th>Status</th>
+                                <th>Duration</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for run in recent_runs %}
+                            <tr>
+                                <td>
+                                    <i class="fas fa-circle me-2" style="font-size:0.5rem; color:#0057A8; vertical-align:middle;"></i>
+                                    {{ run.service_name }}
+                                </td>
+                                <td>
+                                    {% if run.status == 'success' %}
+                                        <span class="badge-success-soft"><i class="fas fa-check me-1"></i>success</span>
+                                    {% elif run.status == 'failed' %}
+                                        <span class="badge-failed-soft"><i class="fas fa-xmark me-1"></i>failed</span>
+                                    {% else %}
+                                        <span class="badge-running-soft"><i class="fas fa-spinner fa-spin me-1"></i>{{ run.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if run.duration_ms %}
+                                        {% if run.duration_ms < 1000 %}
+                                            {{ run.duration_ms }}ms
+                                        {% else %}
+                                            {{ (run.duration_ms / 1000) | round(1) }}s
+                                        {% endif %}
+                                    {% else %}
+                                        --
+                                    {% endif %}
+                                </td>
+                                <td class="text-muted">{{ run.ran_at[:16] if run.ran_at else '--' }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-play-circle fa-2x mb-2 d-block" style="color:#cbd5e1;"></i>
+                    No runs yet. <a href="/ui/services">Trigger a service</a> to get started.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Service status overview -->
+    <div class="col-xl-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="mb-3 fw-bold">Service Status</h6>
+                {% for svc in services %}
+                <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                    <div style="font-size:0.85rem; font-weight:500;">{{ svc.name }}</div>
+                    {% if svc.last_run_status == 'success' %}
+                        <span class="badge-success-soft">OK</span>
+                    {% elif svc.last_run_status == 'failed' %}
+                        <span class="badge-failed-soft">Failed</span>
+                    {% else %}
+                        <span class="badge-never-soft">Never run</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
