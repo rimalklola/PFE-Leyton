@@ -12,8 +12,14 @@ COPY api/templates ./templates
 # "from shared.registry import ..." works regardless of __file__ depth.
 COPY services /app/services
 ENV PYTHONPATH=/app/services
+ENV SERVICES_ROOT=/app/services
 
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Security: run as non-root user
+RUN adduser --disabled-password --gecos "" appuser \
+    && chown -R appuser:appuser /app
+USER appuser
 
 EXPOSE 8000
 

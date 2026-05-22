@@ -2,6 +2,10 @@ global:
   scrape_interval: 15s       # how often Prometheus pulls metrics
   evaluation_interval: 15s   # how often alerting rules are evaluated
 
+# SLO recording rules and alert definitions
+rule_files:
+  - /etc/prometheus/rules.yml
+
 scrape_configs:
 
   # Prometheus scrapes itself (useful for pipeline health meta-monitoring)
