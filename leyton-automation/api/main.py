@@ -289,29 +289,46 @@ def trigger_service(service_name: str, background_tasks: BackgroundTasks):
     return {"run_id": run_id, "service": service_name, "status": "queued"}
 
 
-@app.post("/run/{service_name}/upload", summary="Trigger a service with file upload(s)")
+@app.post("/run/{service_name}/upload", summary="Trigger a service with file upload(s) and optional form fields")
 async def trigger_service_upload(
     service_name: str,
     background_tasks: BackgroundTasks,
-    files: list[UploadFile] = File(...),
+    request: Request,
 ):
+    """
+    Handles multipart requests that contain both files and text fields.
+    Files are saved to uploads/, paths passed via INPUT_FILES env var.
+    Text fields are passed as PARAM_* env vars (same as /form endpoint).
+    This allows services like folder-creator to receive both client files
+    and mission metadata in a single request.
+    """
     if service_name not in VALID_SERVICES:
         raise HTTPException(status_code=404, detail=f"Unknown service '{service_name}'.")
 
     upload_dir = os.path.join(_SERVICES_ROOT, service_name, "uploads")
     os.makedirs(upload_dir, exist_ok=True)
 
+    form       = await request.form()
     saved_paths = []
-    for f in files:
-        content = await f.read()
-        _validate_upload(f, content)
-        dest = os.path.join(upload_dir, f.filename)
-        with open(dest, "wb") as out:
-            out.write(content)
-        saved_paths.append(dest)
+    env_extra   = {}
 
-    run_id    = str(uuid.uuid4())
-    env_extra = {"INPUT_FILES": json.dumps(saved_paths)}
+    for key, value in form.multi_items():
+        if hasattr(value, "filename") and value.filename:
+            # It's a file
+            content = await value.read()
+            _validate_upload(value, content)
+            dest = os.path.join(upload_dir, value.filename)
+            with open(dest, "wb") as out:
+                out.write(content)
+            saved_paths.append(dest)
+        else:
+            # It's a text field — pass as PARAM_*
+            env_extra[f"PARAM_{key.upper()}"] = str(value)
+
+    if saved_paths:
+        env_extra["INPUT_FILES"] = json.dumps(saved_paths)
+
+    run_id = str(uuid.uuid4())
     background_tasks.add_task(_execute_service, service_name, run_id, env_extra)
     return {"run_id": run_id, "service": service_name, "status": "queued",
             "files_received": len(saved_paths)}

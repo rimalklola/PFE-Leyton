@@ -155,34 +155,61 @@ function renderInputArea(svc) {
             </div>
             <small class="text-muted d-block mt-2">Accepted: .xlsx, .xls, .pdf — multiple files allowed</small>`;
 
-    } else if (svc.input_type === 'file') {
-        area.innerHTML = `
-            <div class="mb-2" style="font-size:0.88rem; font-weight:600;">Upload Client Files</div>
-            <div class="row g-2 mb-3">
-                <div class="col-sm-6">
-                    <label class="form-label" style="font-size:0.82rem;">Client Name *</label>
-                    <input type="text" id="paramClientName" class="form-control form-control-sm"
-                        placeholder="e.g. Acme Industries">
-                </div>
-                <div class="col-sm-3">
-                    <label class="form-label" style="font-size:0.82rem;">Mission Type</label>
-                    <select id="paramMissionType" class="form-select form-select-sm">
-                        <option>Belspo</option><option>CIR</option>
-                        <option>CII</option><option>JEI</option>
-                    </select>
-                </div>
-                <div class="col-sm-3">
-                    <label class="form-label" style="font-size:0.82rem;">Year</label>
-                    <input type="number" id="paramYear" class="form-control form-control-sm"
-                        value="${new Date().getFullYear()}">
-                </div>
+    } else if (svc.input_type === 'files+form') {
+        // Renders form fields from the manifest + a multi-file upload area
+        const form = document.createElement('form');
+        form.id = 'serviceForm';
+
+        // Form fields from manifest
+        const fieldRow = document.createElement('div');
+        fieldRow.className = 'row g-2 mb-3';
+        svc.fields.forEach(f => {
+            const col = document.createElement('div');
+            col.className = f.type === 'email' || f.name === 'contact_name' ? 'col-sm-6' : 'col-sm-4';
+            const label = document.createElement('label');
+            label.className = 'form-label';
+            label.style.fontSize = '0.82rem';
+            label.textContent = f.label + (f.required ? ' *' : '');
+            col.appendChild(label);
+            let input;
+            if (f.type === 'select') {
+                input = document.createElement('select');
+                input.className = 'form-select form-select-sm';
+                f.options.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o; opt.textContent = o;
+                    input.appendChild(opt);
+                });
+            } else {
+                input = document.createElement('input');
+                input.type = f.type;
+                input.className = 'form-control form-control-sm';
+                if (f.placeholder) input.placeholder = f.placeholder;
+                if (f.name === 'year') input.value = new Date().getFullYear();
+            }
+            input.name = f.name;
+            input.required = f.required || false;
+            col.appendChild(input);
+            fieldRow.appendChild(col);
+        });
+        form.appendChild(fieldRow);
+
+        // File upload area
+        const uploadDiv = document.createElement('div');
+        uploadDiv.innerHTML = `
+            <div class="mb-1" style="font-size:0.88rem; font-weight:600;">Client Files</div>
+            <div class="border border-dashed rounded p-4 text-center" style="border-color:#cbd5e1!important; background:#f8fafc;">
+                <i class="fas fa-cloud-upload-alt fa-2x mb-2 d-block" style="color:#94a3b8;"></i>
+                <p class="text-muted mb-2" style="font-size:0.85rem;">Upload all files received from the client</p>
+                <input type="file" id="fileInput" multiple accept="${svc.accept}"
+                    class="form-control form-control-sm" style="max-width:360px; margin:0 auto;">
             </div>
-            <div class="border border-dashed rounded p-3 text-center" style="border-color:#cbd5e1!important; background:#f8fafc;">
-                <i class="fas fa-folder-open fa-2x mb-1 d-block" style="color:#94a3b8;"></i>
-                <p class="text-muted mb-1" style="font-size:0.82rem;">Optionally upload a ZIP of client documents</p>
-                <input type="file" id="fileInput" accept=".zip"
-                    class="form-control form-control-sm" style="max-width:280px; margin:0 auto;">
-            </div>`;
+            <small class="text-muted d-block mt-2">
+                Files are automatically sorted into the correct subfolder based on their name.
+                Unrecognised files go to <code>_Inbox/</code>.
+            </small>`;
+        form.appendChild(uploadDiv);
+        area.appendChild(form);
 
     } else if (svc.input_type === 'urls') {
         area.innerHTML = `
@@ -224,21 +251,17 @@ async function submitRun() {
             for (const f of files) fd.append('files', f);
             response = await fetch(`/run/${currentService}/upload`, { method: 'POST', body: fd });
 
-        } else if (svc.input_type === 'file') {
-            const clientName = document.getElementById('paramClientName').value.trim();
-            if (!clientName) {
-                showResult('error', '<i class="fas fa-circle-xmark me-2"></i>Client Name is required.');
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-play me-2"></i>Run Service';
-                return;
-            }
+        } else if (svc.input_type === 'files+form') {
+            // Validate required form fields
+            const form = document.getElementById('serviceForm');
+            if (!form.checkValidity()) { form.reportValidity(); return; }
             const fd = new FormData();
-            fd.append('client_name', clientName);
-            fd.append('mission_type', document.getElementById('paramMissionType').value);
-            fd.append('year', document.getElementById('paramYear').value);
+            // Append text fields
+            new FormData(form).forEach((val, key) => { if (typeof val === 'string') fd.append(key, val); });
+            // Append files
             const fileEl = document.getElementById('fileInput');
-            if (fileEl.files.length) fd.append('files', fileEl.files[0]);
-            response = await fetch(`/run/${currentService}/form`, { method: 'POST', body: fd });
+            for (const f of fileEl.files) fd.append('files', f);
+            response = await fetch(`/run/${currentService}/upload`, { method: 'POST', body: fd });
 
         } else if (svc.input_type === 'urls') {
             const urls = document.getElementById('urlInput').value.trim();

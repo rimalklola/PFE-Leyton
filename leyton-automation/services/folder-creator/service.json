@@ -1,22 +1,23 @@
 {
   "name": "folder-creator",
-  "version": "1.0.0",
-  "description": "Creates a standardized client folder hierarchy for a new mission, including all required subfolders and a metadata file.",
+  "version": "2.0.0",
+  "description": "Upload the client's loose files and provide mission details. The service creates the standard folder hierarchy and automatically places each file in the correct subfolder based on its name. Unrecognised files go to _Inbox.",
   "icon": "fas fa-folder-open",
-  "tags": ["onboarding", "document", "structure"],
-  "input_type": "form",
+  "tags": ["onboarding", "document", "classification", "structure"],
+  "input_type": "files+form",
   "timeout": 60,
+  "accept": ".pdf,.xlsx,.xls,.docx,.doc,.pptx,.ppt,.zip,.csv,.txt",
   "fields": [
     { "name": "client_name",   "label": "Client Name",    "type": "text",   "required": true,  "placeholder": "e.g. Acme Industries" },
-    { "name": "consultant",    "label": "Consultant",     "type": "text",   "required": false, "placeholder": "e.g. Rim Lakhiri" },
     { "name": "mission_type",  "label": "Mission Type",   "type": "select", "required": true,
       "options": ["Belspo", "CIR", "CII", "JEI"] },
     { "name": "year",          "label": "Year",           "type": "number", "required": false, "placeholder": "2025" },
-    { "name": "contact_name",  "label": "Client Contact", "type": "text",   "required": false, "placeholder": "Full name" },
+    { "name": "consultant",    "label": "Consultant",     "type": "text",   "required": false, "placeholder": "Your name" },
+    { "name": "contact_name",  "label": "Client Contact", "type": "text",   "required": false, "placeholder": "Client contact name" },
     { "name": "contact_email", "label": "Contact Email",  "type": "email",  "required": false, "placeholder": "contact@client.be" }
   ],
   "output": {
     "type": "folder",
-    "description": "Structured folder hierarchy with metadata.json"
+    "description": "Classified folder hierarchy with all client files sorted into the correct subfolders"
   }
 }
