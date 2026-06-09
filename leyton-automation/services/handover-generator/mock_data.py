@@ -23,9 +23,14 @@ MOCK_HANDOVER_DATA = [
             "gdpr": "Ok"
         },
         "pocs": {
-            "technical_contact": "alice.dubois@technova.com / +32 475 12 34 56",
+            "technical_contact": "Alice Dubois — alice.dubois@technova.com / +32 475 12 34 56",
             "hr_contact": "hr@technova.com / +32 2 123 45 67",
-            "social_secretary": "SD Worx / sdworx@sdworx.com"
+            "social_secretary": "SD Worx — sdworx@sdworx.com",
+            "key_contacts": "Alice Dubois (CTO), Marie Lambert (CFO)"
+        },
+        "folder_links": {
+            "sharepoint": "https://leyton.sharepoint.com/sites/clients/TechNovaSolutions",
+            "network_path": "\\\\leyton-server\\Clients\\TechNova_Solutions\\Belspo_2025"
         },
         "previous_mission": {
             "technical_report": "DT available for 2023 and 2024",

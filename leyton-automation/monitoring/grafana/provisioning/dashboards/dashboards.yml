@@ -1,12 +1,8 @@
 apiVersion: 1
 
 providers:
-  - name: leyton-dashboards
-    orgId: 1
+  - name: leyton
+    folder: Leyton
     type: file
-    disableDeletion: true
-    updateIntervalSeconds: 30
-    allowUiUpdates: false
     options:
       path: /var/lib/grafana/dashboards
-      foldersFromFilesStructure: false

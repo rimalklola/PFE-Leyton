@@ -108,6 +108,37 @@ function renderInputArea(svc) {
     if (svc.input_type === 'form') {
         const form = document.createElement('form');
         form.id = 'serviceForm';
+
+        // ── Optional pre-fill from existing file ────────────────────
+        if (svc.supports_extract) {
+            const strip = document.createElement('div');
+            strip.className = 'mb-4 p-3 rounded-3 d-flex align-items-center gap-3 flex-wrap';
+            strip.style.cssText = 'background:#f0f7ff; border:1.5px dashed #93c5fd;';
+            strip.innerHTML = `
+                <div style="flex:0 0 auto;">
+                    <i class="fas fa-file-import fa-lg" style="color:#3b82f6;"></i>
+                </div>
+                <div style="flex:1; min-width:0;">
+                    <div class="fw-semibold" style="font-size:0.85rem; color:#1e40af;">
+                        Pre-fill from existing handover
+                        <span class="fw-normal text-muted ms-1">— optional</span>
+                    </div>
+                    <small class="text-muted">Upload a previous handover Excel and the fields below will be filled automatically.</small>
+                </div>
+                <div class="d-flex align-items-center gap-2" style="flex:0 0 auto;">
+                    <input type="file" id="extractFileInput" accept="${svc.extract_accept}"
+                        class="form-control form-control-sm" style="max-width:220px;">
+                    <span id="extractStatus" style="font-size:0.8rem; white-space:nowrap;"></span>
+                </div>`;
+            form.appendChild(strip);
+
+            // Wire extraction on file select (after DOM is appended)
+            setTimeout(() => {
+                const fi = document.getElementById('extractFileInput');
+                if (fi) fi.addEventListener('change', () => extractAndFill(fi));
+            }, 50);
+        }
+
         svc.fields.forEach(f => {
             const group = document.createElement('div');
             group.className = 'mb-3';
@@ -221,6 +252,49 @@ function renderInputArea(svc) {
     }
 }
 
+async function extractAndFill(fileInput) {
+    const status = document.getElementById('extractStatus');
+    if (!fileInput.files.length) return;
+
+    status.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Reading...';
+
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+
+    try {
+        const resp = await fetch(`/extract/${currentService}`, { method: 'POST', body: fd });
+        if (!resp.ok) {
+            status.innerHTML = '<span style="color:#ef4444;"><i class="fas fa-xmark me-1"></i>Could not read file</span>';
+            return;
+        }
+        const data = await resp.json();
+        const fields = data.fields || {};
+        let filled = 0;
+
+        for (const [name, value] of Object.entries(fields)) {
+            if (!value || value === '—') continue;
+            const el = document.querySelector(`#serviceForm [name="${name}"]`);
+            if (!el) continue;
+            // For select: only set if the value matches one of the options
+            if (el.tagName === 'SELECT') {
+                const opt = [...el.options].find(o => o.value.toLowerCase() === value.toLowerCase());
+                if (opt) { el.value = opt.value; filled++; }
+            } else {
+                el.value = value;
+                filled++;
+            }
+        }
+
+        if (filled > 0) {
+            status.innerHTML = `<span style="color:#10b981;"><i class="fas fa-check me-1"></i>${filled} field${filled>1?'s':''} filled</span>`;
+        } else {
+            status.innerHTML = '<span style="color:#f59e0b;"><i class="fas fa-triangle-exclamation me-1"></i>No matching fields found</span>';
+        }
+    } catch(e) {
+        status.innerHTML = '<span style="color:#ef4444;"><i class="fas fa-xmark me-1"></i>Connection error</span>';
+    }
+}
+
 function showResult(type, html) {
     const box = document.getElementById('resultBox');
     box.className = 'result-box mb-3 result-' + type;
@@ -303,12 +377,38 @@ function pollStatus(runId) {
         const data = await fetch('/runs/' + runId).then(r => r.json());
         if (data.status === 'completed') {
             clearInterval(pollInterval);
-            showResult('success', '<i class="fas fa-circle-check me-2"></i>Completed successfully. Your file is ready.');
-            const dl = document.getElementById('downloadBtn');
-            dl.href = `/download/${currentService}`;
-            dl.innerHTML = '<i class="fas fa-download me-2"></i>Download File';
-            dl.style.cssText = 'display:inline-block; background:#10b981; color:#fff; border-radius:10px; padding:0.65rem 1.5rem; font-weight:600; text-decoration:none;';
-            document.getElementById('runBtn').style.display = 'none';
+            const svc = SERVICE_META[currentService];
+
+            if (svc.output_type === 'folder' && data.result) {
+                // Folder-creator: show path + classification summary, no download
+                const r = data.result;
+                let html = `<i class="fas fa-circle-check me-2"></i><strong>Folder structure created</strong>`;
+                if (r.client_name) html += ` for <strong>${r.client_name}</strong>`;
+                html += `.<br><small class="text-muted d-block mt-1"><i class="fas fa-folder-open me-1"></i>${r.base_path}</small>`;
+                if (r.files_placed > 0) {
+                    html += `<div class="mt-2" style="font-size:0.82rem; line-height:1.8;">
+                        <strong>${r.files_placed} file${r.files_placed > 1 ? 's' : ''} classified:</strong><br>`;
+                    r.file_log.forEach(f => {
+                        html += `&nbsp;&nbsp;<i class="fas fa-file me-1" style="color:#94a3b8;"></i>${f.file}
+                            &rarr; <code style="font-size:0.78rem;">${f.placed_in}</code><br>`;
+                    });
+                    html += `</div>`;
+                } else {
+                    html += `<small class="d-block mt-1 text-muted">No files were uploaded — empty folder structure created.</small>`;
+                }
+                showResult('success', html);
+                document.getElementById('runBtn').style.display = 'none';
+                // no download button for folder output
+
+            } else {
+                // Normal file output: show download button
+                showResult('success', '<i class="fas fa-circle-check me-2"></i>Completed successfully. Your file is ready.');
+                const dl = document.getElementById('downloadBtn');
+                dl.href = `/download/${currentService}`;
+                dl.innerHTML = '<i class="fas fa-download me-2"></i>Download File';
+                dl.style.cssText = 'display:inline-block; background:#10b981; color:#fff; border-radius:10px; padding:0.65rem 1.5rem; font-weight:600; text-decoration:none;';
+                document.getElementById('runBtn').style.display = 'none';
+            }
         } else if (data.status === 'failed' || data.status === 'timeout') {
             clearInterval(pollInterval);
             const msg = data.error || 'The service encountered an error. Please check your input and try again.';

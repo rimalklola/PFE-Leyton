@@ -133,6 +133,7 @@ services:
   loki:
     image: grafana/loki:2.9.7
     container_name: leyton-loki
+    user: "0"
     ports:
       - "3100:3100"
     volumes:

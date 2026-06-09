@@ -1,3 +1,4 @@
+# API
 fastapi==0.111.0
 uvicorn==0.29.0
 prometheus-fastapi-instrumentator==6.1.0
@@ -5,3 +6,9 @@ prometheus-client==0.20.0
 jinja2==3.1.4
 python-multipart==0.0.9
 aiofiles==23.2.1
+
+# Service dependencies (services run as subprocesses inside this container)
+openpyxl==3.1.2
+pdfplumber==0.11.0
+requests==2.31.0
+beautifulsoup4==4.12.3

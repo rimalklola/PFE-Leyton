@@ -273,6 +273,18 @@ def run():
         log.info("Service completed",
                  processed=len(results), ok=ok, duration_ms=duration_ms)
 
+        # Write a summary file so the API can pass it back to the UI
+        summary = {
+            "base_path":    results[0].get("base_path", "") if results else "",
+            "client_name":  results[0].get("client_name", "") if results else "",
+            "files_placed": sum(r.get("files_placed", 0) for r in results),
+            "file_log":     [e for r in results for e in r.get("file_log", [])],
+        }
+        summary_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
+        os.makedirs(summary_dir, exist_ok=True)
+        with open(os.path.join(summary_dir, "last_result.json"), "w") as f:
+            json.dump(summary, f, indent=2)
+
     except Exception as exc:
         duration_ms = int((time.time() - start) * 1000)
         log.error("Service failed", error=str(exc))

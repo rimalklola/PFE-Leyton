@@ -5,6 +5,8 @@ import json
 import subprocess
 import time
 import sqlite3
+import tempfile
+import importlib.util
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
@@ -159,6 +161,14 @@ def _execute_service(service_name: str, run_id: str, env_extra: dict = None):
         )
         if result.returncode == 0:
             final_status = "completed"
+            # Pick up optional result summary written by the service
+            result_file = os.path.join(_SERVICES_ROOT, service_name, "output", "last_result.json")
+            if os.path.isfile(result_file):
+                try:
+                    with open(result_file) as rf:
+                        _run_status[run_id]["result"] = json.load(rf)
+                except Exception:
+                    pass
         else:
             final_status = "failed"
             _run_status[run_id]["error"] = (result.stderr or "Non-zero exit code")[:500]
@@ -241,11 +251,14 @@ def ui_services(request: Request):
 
     service_meta_json = json.dumps({
         name: {
-            "title":       m.get("name", name).replace("-", " ").title(),
-            "description": m.get("description", ""),
-            "input_type":  m.get("input_type", "form"),
-            "accept":      m.get("accept", ""),
-            "fields":      m.get("fields", []),
+            "title":            m.get("name", name).replace("-", " ").title(),
+            "description":      m.get("description", ""),
+            "input_type":       m.get("input_type", "form"),
+            "accept":           m.get("accept", ""),
+            "fields":           m.get("fields", []),
+            "supports_extract": m.get("supports_extract", False),
+            "extract_accept":   m.get("extract_accept", ".xlsx,.xls"),
+            "output_type":      m.get("output", {}).get("type", "file"),
         }
         for name, m in SERVICE_CATALOG.items()
     })
@@ -384,6 +397,58 @@ def list_services():
             "last_run_duration_ms": (last or {}).get("duration_ms"),
         })
     return {"services": result, "count": len(result)}
+
+
+@app.post("/extract/{service_name}", summary="Extract form fields from an uploaded file")
+async def extract_fields_from_upload(service_name: str, file: UploadFile = File(...)):
+    """
+    Accepts a file upload and returns a JSON dict of extracted form field values.
+    The service must set supports_extract=true in its manifest and implement
+    an extract_fields(filepath) function in its main.py.
+    Used by the UI to pre-fill the form when a previous handover is uploaded.
+    """
+    if service_name not in VALID_SERVICES:
+        raise HTTPException(status_code=404, detail=f"Unknown service '{service_name}'.")
+
+    manifest = SERVICE_CATALOG.get(service_name, {})
+    if not manifest.get("supports_extract"):
+        raise HTTPException(status_code=400, detail="This service does not support field extraction.")
+
+    content = await file.read()
+    suffix = os.path.splitext(file.filename or "file")[1] or ".xlsx"
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        svc_dir = os.path.join(_SERVICES_ROOT, service_name)
+        svc_main = os.path.join(svc_dir, "main.py")
+
+        # Add service dir to path so its local imports (mock_data, etc.) resolve
+        if svc_dir not in sys.path:
+            sys.path.insert(0, svc_dir)
+
+        spec = importlib.util.spec_from_file_location(
+            f"svc_{service_name.replace('-', '_')}_extract", svc_main
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        if not hasattr(mod, "extract_fields"):
+            raise HTTPException(status_code=400, detail="Service does not implement extract_fields().")
+
+        fields = mod.extract_fields(tmp_path)
+        return {"fields": fields, "count": len(fields)}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {exc}")
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 @app.get("/download/{service_name}", summary="Download latest output file")

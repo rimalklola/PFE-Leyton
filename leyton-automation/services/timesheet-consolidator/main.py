@@ -30,6 +30,12 @@ MONTH_ALIASES = {
     "nov": "november", "dec": "december",
 }
 
+MONTH_NUM_TO_NAME = {
+    1: "january", 2: "february", 3: "march", 4: "april",
+    5: "may", 6: "june", 7: "july", 8: "august",
+    9: "september", 10: "october", 11: "november", 12: "december",
+}
+
 HEADER_FILL = PatternFill(start_color="002D5B", end_color="002D5B", fill_type="solid")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 TOTAL_FILL = PatternFill(start_color="E8F0FB", end_color="E8F0FB", fill_type="solid")
@@ -157,31 +163,6 @@ def extract_from_excel(filepath: str) -> list:
         "(column names may be in French or English)."
     )
 
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        emp = row[headers["employee"] - 1]
-        month = row[headers["month"] - 1]
-        hours = row[headers["hours"] - 1]
-        rd_pct = row[headers.get("rd_percentage", 0) - 1] if "rd_percentage" in headers else 1.0
-
-        if not emp or not month or hours is None:
-            continue
-
-        month_norm = normalize_month(str(month))
-        if not month_norm:
-            continue
-
-        try:
-            rows.append({
-                "employee": str(emp).strip(),
-                "month": month_norm,
-                "hours": float(hours),
-                "rd_percentage": float(rd_pct) if rd_pct is not None else 1.0,
-            })
-        except (ValueError, TypeError):
-            continue
-
-    return rows
-
 
 def _extract_wide_format(ws) -> list:
     """
@@ -247,15 +228,148 @@ def _extract_wide_format(ws) -> list:
     return rows
 
 
-def extract_from_pdf(filepath: str) -> list:
+def _employee_from_filename(filename: str) -> str:
+    """
+    Extract employee name from filenames like:
+      'BUXANT Timesheet_Cerdecam 2025.pdf'  → 'BUXANT'
+      'Sara Benali - Timesheet Jan 2025.pdf' → 'Sara Benali'
+    """
+    name = os.path.splitext(filename)[0]
+    # Split on common separators (order matters — more specific first)
+    for sep in [" - Timesheet", " Timesheet", "-Timesheet", "_Timesheet",
+                " - timesheet", " timesheet"]:
+        if sep.lower() in name.lower():
+            idx = name.lower().index(sep.lower())
+            name = name[:idx]
+            break
+    # If still has underscore prefix splitting, try first token before '_'
+    if "_" in name and " " not in name.split("_")[0]:
+        name = name.split("_")[0]
+    name = name.strip()
+    # Preserve ALL-CAPS surnames (e.g. BUXANT), title-case mixed names
+    return name if name.isupper() else name.title()
+
+
+def _detect_daily_log_columns(row: list) -> bool:
+    """Return True if this table row looks like a daily-log header (Date | Période | Description)."""
+    cells = [str(c).strip().lower() if c else "" for c in row]
+    has_date = any("date" in c for c in cells)
+    has_period = any("riode" in c or "ériode" in c for c in cells)
+    has_desc = any("description" in c or "activit" in c for c in cells)
+    return has_date and (has_period or has_desc)
+
+
+# Keywords that indicate absence/holiday — NOT R&D work
+_SKIP_ACTIVITY_KEYWORDS = frozenset([
+    "congé", "conge", "congés", "conges",
+    "férié", "ferie", "jour férié", "fériés",
+    "maladie", "absence", "absent",
+    "repos", "vacance", "holiday", "leave",
+    "légaux", "legaux", "extra légaux", "extra legaux",
+])
+
+
+def _is_real_activity(desc: str) -> bool:
+    """Return True only if description represents actual work (not absence/holiday/empty)."""
+    if not desc or not desc.strip():
+        return False
+    desc_lower = desc.strip().lower()
+    return not any(kw in desc_lower for kw in _SKIP_ACTIVITY_KEYWORDS)
+
+
+def _parse_date_to_month(date_str: str):
+    """Parse DD/MM/YYYY (or DD-MM-YYYY) → canonical month name string."""
+    if not date_str:
+        return None
+    s = str(date_str).strip().replace("-", "/")
+    parts = s.split("/")
+    if len(parts) >= 2:
+        try:
+            return MONTH_NUM_TO_NAME.get(int(parts[1]))
+        except (ValueError, IndexError):
+            pass
+    return None
+
+
+def _extract_from_pdf_daily_log(filepath: str) -> list:
+    """
+    Parse BUXANT-style daily-log PDFs:
+      Date | Période | Description des activités
+
+    - Employee name is extracted from the filename.
+    - Month is extracted from the Date column (DD/MM/YYYY).
+    - Each half-day (Matin / Après-midi) with a real activity description = 4 h.
+    - Absences, congés, jours fériés are excluded.
+    - All activity is assumed to be 100 % R&D (standard for these sheets).
+    """
+    employee = _employee_from_filename(os.path.basename(filepath))
+    monthly_halfdays: dict = defaultdict(int)
+
+    with pdfplumber.open(filepath) as pdf:
+        for page in pdf.pages:
+            table = page.extract_table()
+            if not table or len(table) < 3:
+                continue
+
+            # Locate the header row that contains Date + Période/Description
+            header_idx = None
+            for i, row in enumerate(table):
+                if _detect_daily_log_columns(row):
+                    header_idx = i
+                    break
+            if header_idx is None:
+                continue
+
+            header = [str(c).strip().lower() if c else "" for c in table[header_idx]]
+            date_col = next((i for i, h in enumerate(header) if "date" in h), None)
+            desc_col = next(
+                (i for i, h in enumerate(header) if "description" in h or "activit" in h),
+                None,
+            )
+            if date_col is None or desc_col is None:
+                continue
+
+            current_month = None
+            for row in table[header_idx + 1:]:
+                if not any(row):
+                    continue
+
+                # Date cell: present on the first half-day row (Matin), blank on Après-midi
+                date_val = row[date_col] if date_col < len(row) else None
+                if date_val and str(date_val).strip():
+                    m = _parse_date_to_month(str(date_val))
+                    if m:
+                        current_month = m
+
+                if not current_month:
+                    continue
+
+                desc_val = row[desc_col] if desc_col < len(row) else None
+                if _is_real_activity(str(desc_val) if desc_val else ""):
+                    monthly_halfdays[current_month] += 1
+
+    if not monthly_halfdays:
+        return []
+
+    # 1 half-day = 4 hours of R&D
+    return [
+        {
+            "employee": employee,
+            "month": month,
+            "hours": halfdays * 4.0,
+            "rd_percentage": 1.0,
+        }
+        for month, halfdays in monthly_halfdays.items()
+    ]
+
+
+def _extract_from_pdf_tabular(filepath: str) -> list:
     """
     Reads a PDF timesheet table with flexible column naming (FR/EN aliases).
     Employee | Month | Hours | RD_Percentage (optional)
     """
     rows = []
-    emp_triggers = set()
-    for aliases in _COL_ALIASES["employee"]:
-        emp_triggers.add(aliases)
+    emp_triggers = set(_COL_ALIASES["employee"])
 
     with pdfplumber.open(filepath) as pdf:
         for page in pdf.pages:
@@ -304,6 +418,20 @@ def extract_from_pdf(filepath: str) -> list:
                     continue
 
     return rows
+
+
+def extract_from_pdf(filepath: str) -> list:
+    """
+    Auto-detect PDF timesheet format and extract rows.
+
+    Tries in order:
+      1. Tabular format  (Employee | Month | Hours columns)
+      2. Daily-log format (Date | Période | Description des activités — BUXANT style)
+    """
+    rows = _extract_from_pdf_tabular(filepath)
+    if rows:
+        return rows
+    return _extract_from_pdf_daily_log(filepath)
 
 
 def consolidate(rows: list) -> list:

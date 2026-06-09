@@ -62,11 +62,106 @@ def write_row(ws, row, label, value, label_bg=LIGHT_GREY):
     ws.row_dimensions[row].height = 30
 
 
+def write_link_row(ws, row, label, url, label_bg=LIGHT_GREY):
+    """Like write_row but makes the value a clickable hyperlink if it starts with http."""
+    label_cell = ws.cell(row=row, column=1, value=label)
+    section_style(label_cell, bg=label_bg)
+    value_cell = ws.cell(row=row, column=2, value=url or "—")
+    value_style(value_cell)
+    if url and (url.startswith("http://") or url.startswith("https://")):
+        value_cell.hyperlink = url
+        value_cell.font = Font(color="0563C1", underline="single")
+    ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=4)
+    ws.row_dimensions[row].height = 30
+
+
 def write_section_header(ws, row, title):
     cell = ws.cell(row=row, column=1, value=title)
     header_style(cell)
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
     ws.row_dimensions[row].height = 25
+
+
+# ---------------------------------------------------------------------------
+# Field extraction — reverse-parse our own Excel output to pre-fill the form
+# ---------------------------------------------------------------------------
+
+_LABEL_TO_FIELD = {
+    # Team
+    "ho done with":                 "outgoing_consultant",
+    "tax consultant":               "incoming_consultant",
+    "sales":                        "sales_contact",
+    # Company info
+    "sector of activity":           "sector",
+    "type of company":              "company_type",
+    "account history":              "account_history",
+    "belspo vat number":            "belspo_vat",
+    "belspo password":              "belspo_password",
+    "belspo notification":          "belspo_notification",
+    "previous control":             "previous_control",
+    # Contract
+    "tax measure":                  "mission_type",
+    "expected year of application": "mission_start",
+    "remuneration system":          "remuneration_system",
+    "gdpr":                         "gdpr",
+    # Contacts
+    "technical contact":            "technical_contact",
+    "hr contact":                   "hr_contact",
+    "social secretary":             "social_secretary",
+    "key client contacts":          "key_contacts",
+    # Folder links
+    "sharepoint / web url":         "folder_link",
+    "network drive path":           "network_path",
+    # Previous mission
+    "general comments":             "notes",
+    "next step":                    "pending_tasks",
+    "introduction email":           "introduction_email",
+}
+
+
+def extract_fields(filepath: str) -> dict:
+    """
+    Parse an existing handover Excel and return a flat dict mapping
+    form field names → extracted values, ready to pre-fill the UI form.
+
+    Supports:
+    - Our own generated handover format (label | value two-column layout)
+    - Any two-column Excel where column A is a label and column B is the value
+    """
+    result = {}
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext not in (".xlsx", ".xls"):
+        return result
+
+    try:
+        wb = openpyxl.load_workbook(filepath, data_only=True)
+        ws = wb.active
+
+        for row in ws.iter_rows(values_only=True):
+            if not any(row):
+                continue
+
+            a = str(row[0] or "").strip()
+            b = str(row[1] or "").strip() if len(row) > 1 and row[1] is not None else ""
+
+            # Title row  →  "HANDOVER FILE - CLIENT NAME"
+            if a.upper().startswith("HANDOVER FILE"):
+                parts = a.split("-", 1)
+                if len(parts) == 2:
+                    client = parts[1].strip().title()
+                    if client:
+                        result["client_name"] = client
+                continue
+
+            label = a.lower().strip()
+            # Skip blank values and placeholder dashes
+            if label in _LABEL_TO_FIELD and b and b not in ("—", "-", "None", ""):
+                result[_LABEL_TO_FIELD[label]] = b
+
+    except Exception:
+        pass   # return whatever was collected so far
+
+    return result
 
 
 def generate_handover(data: dict) -> str:
@@ -95,6 +190,16 @@ def generate_handover(data: dict) -> str:
     date_cell.alignment = Alignment(horizontal="right")
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
     row += 2
+
+    # ── FOLDER LINKS ───────────────────────────────────────────────
+    links = data.get("folder_links", {})
+    if links.get("sharepoint") or links.get("network_path"):
+        write_section_header(ws, row, "CLIENT FOLDER LINKS")
+        row += 1
+        write_link_row(ws, row, "SharePoint / Web URL", links.get("sharepoint", "—"))
+        row += 1
+        write_row(ws, row, "Network Drive Path", links.get("network_path", "—"))
+        row += 2
 
     write_section_header(ws, row, "TEAM COMPOSITION")
     row += 1
@@ -138,11 +243,13 @@ def generate_handover(data: dict) -> str:
     write_section_header(ws, row, "POINTS OF CONTACT")
     row += 1
     poc = data["pocs"]
-    write_row(ws, row, "Technical Contact", poc["technical_contact"])
+    write_row(ws, row, "Technical Contact",  poc.get("technical_contact", "—"))
     row += 1
-    write_row(ws, row, "HR Contact", poc["hr_contact"])
+    write_row(ws, row, "HR Contact",         poc.get("hr_contact", "—"))
     row += 1
-    write_row(ws, row, "Social Secretary", poc["social_secretary"])
+    write_row(ws, row, "Social Secretary",   poc.get("social_secretary", "—"))
+    row += 1
+    write_row(ws, row, "Key Client Contacts", poc.get("key_contacts", "—"))
     row += 2
 
     write_section_header(ws, row, "PREVIOUS MISSION INFORMATION")
@@ -234,46 +341,51 @@ def _build_from_params() -> dict:
         "team": {
             "ho_done_with":   g("OUTGOING_CONSULTANT"),
             "tax_consultant": g("INCOMING_CONSULTANT"),
-            "sales":          g("SALES_CONTACT", "—"),
+            "sales":          g("SALES_CONTACT"),
         },
         "company_info": {
-            "sector":                 g("SECTOR", "—"),
-            "type":                   g("COMPANY_TYPE", "—"),
-            "account_history":        g("ACCOUNT_HISTORY", "—"),
-            "belspo_vat":             g("BELSPO_VAT", "—"),
-            "belspo_password":        g("BELSPO_PASSWORD", "—"),
-            "belspo_notification":    g("BELSPO_NOTIFICATION", "—"),
-            "previous_control":       g("PREVIOUS_CONTROL", "—"),
+            "sector":              g("SECTOR"),
+            "type":                g("COMPANY_TYPE"),
+            "account_history":     g("ACCOUNT_HISTORY"),
+            "belspo_vat":          g("BELSPO_VAT"),
+            "belspo_password":     g("BELSPO_PASSWORD"),
+            "belspo_notification": g("BELSPO_NOTIFICATION"),
+            "previous_control":    g("PREVIOUS_CONTROL"),
         },
         "contract_info": {
-            "tax_measure":          g("MISSION_TYPE"),
-            "expected_year":        g("MISSION_START", str(datetime.now().year)),
-            "remuneration_system":  g("REMUNERATION_SYSTEM", "—"),
-            "gdpr":                 g("GDPR", "—"),
+            "tax_measure":         g("MISSION_TYPE"),
+            "expected_year":       g("MISSION_START", str(datetime.now().year)),
+            "remuneration_system": g("REMUNERATION_SYSTEM"),
+            "gdpr":                g("GDPR"),
         },
         "pocs": {
-            "technical_contact": g("KEY_CONTACTS", "—"),
-            "hr_contact":        "—",
-            "social_secretary":  "—",
+            "technical_contact": g("TECHNICAL_CONTACT"),
+            "hr_contact":        g("HR_CONTACT"),
+            "social_secretary":  g("SOCIAL_SECRETARY"),
+            "key_contacts":      g("KEY_CONTACTS"),
+        },
+        "folder_links": {
+            "sharepoint":  g("FOLDER_LINK", ""),
+            "network_path": g("NETWORK_PATH", ""),
         },
         "previous_mission": {
-            "technical_report":              "—",
-            "timesheets":                    "—",
-            "nbr_projects":                  "—",
-            "nbr_eligible_employees":        "—",
+            "technical_report":                "—",
+            "timesheets":                      "—",
+            "nbr_projects":                    "—",
+            "nbr_eligible_employees":          "—",
             "structural_research_certificate": "—",
-            "mission_status":                "Active",
-            "control":                       "—",
-            "general_comments":              g("NOTES", "—"),
-            "next_step":                     g("PENDING_TASKS", "—"),
-            "introduction_email":            "—",
+            "mission_status":                  "Active",
+            "control":                         "—",
+            "general_comments":                g("NOTES"),
+            "next_step":                       g("PENDING_TASKS"),
+            "introduction_email":              "—",
         },
         "belspo_notifications": [],
         "employees": [],
         "data_checklist": {
-            "calculation_sheets": False,
-            "control_documents":  False,
-            "diplomas":           False,
+            "calculation_sheets":  False,
+            "control_documents":   False,
+            "diplomas":            False,
             "individual_accounts": False,
         },
     }
