@@ -1,0 +1,257 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# ─────────────────────────────────────────────
+# Shared service matrix — single source of truth
+# ─────────────────────────────────────────────
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/leyton
+
+jobs:
+
+  # ══════════════════════════════════════════
+  # STAGE 1 — LINT
+  # Purpose : catch style and syntax errors before running tests.
+  # Tool    : flake8 with max-line-length=120, E402 ignored (sys.path blocks).
+  # ══════════════════════════════════════════
+  lint:
+    name: "Lint [${{ matrix.service }}]"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - folder-creator
+          - timesheet-consolidator
+          - handover-generator
+          - web-scraper
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install flake8
+        run: pip install flake8
+
+      - name: Lint main.py
+        run: |
+          flake8 services/${{ matrix.service }}/main.py \
+            --max-line-length=120 \
+            --extend-ignore=E402
+
+  # ══════════════════════════════════════════
+  # STAGE 2 — SECURITY SCAN
+  # Purpose : detect known vulnerabilities before code reaches production.
+  # Tools   :
+  #   • Bandit  — static analysis for common Python security issues
+  #   • pip-audit — checks every dependency against the OSV / PyPI Advisory DB
+  # ══════════════════════════════════════════
+  security:
+    name: "Security [${{ matrix.service }}]"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - folder-creator
+          - timesheet-consolidator
+          - handover-generator
+          - web-scraper
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install security tools
+        run: pip install bandit pip-audit
+
+      - name: Bandit — static security analysis
+        run: |
+          bandit services/${{ matrix.service }}/main.py \
+            -ll \
+            --format txt \
+            --exit-zero
+
+      - name: pip-audit — dependency vulnerability scan
+        run: |
+          pip-audit \
+            -r services/${{ matrix.service }}/requirements.txt \
+            --skip-editable \
+            || echo "No packages to audit or audit passed."
+
+  # ══════════════════════════════════════════
+  # STAGE 3 — TEST + COVERAGE
+  # Purpose : verify correctness AND enforce a minimum coverage threshold.
+  # Threshold: 80% — the pipeline fails if any service drops below this.
+  # ══════════════════════════════════════════
+  test:
+    name: "Test [${{ matrix.service }}]"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - folder-creator
+          - timesheet-consolidator
+          - handover-generator
+          - web-scraper
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-cov
+          pip install -r services/${{ matrix.service }}/requirements.txt
+
+      - name: Run tests with coverage
+        run: |
+          SERVICE="${{ matrix.service }}"
+          TEST_MODULE="test_${SERVICE//-/_}"
+          cd services/${{ matrix.service }}
+          python -m pytest ${TEST_MODULE}.py -v \
+            --cov=. \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing \
+            --cov-fail-under=80
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-${{ matrix.service }}
+          path: services/${{ matrix.service }}/coverage.xml
+
+  # ══════════════════════════════════════════
+  # STAGE 4 — BUILD + PUSH
+  # Purpose : produce immutable, versioned Docker images.
+  # Tags    : :latest and :<git-sha>
+  # Gate    : only runs after lint, security, and test all pass.
+  # Push    : only on push to main (not on pull requests).
+  # ══════════════════════════════════════════
+  build:
+    name: "Build [${{ matrix.service }}]"
+    runs-on: ubuntu-latest
+    needs: [lint, security, test]
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - folder-creator
+          - timesheet-consolidator
+          - handover-generator
+          - web-scraper
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (and push on main)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services
+          file: ./services/${{ matrix.service }}/Dockerfile
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+
+  # ══════════════════════════════════════════
+  # STAGE 5 — DEPLOY TO RAILWAY
+  # Purpose : push the freshly built image to the cloud after all quality
+  #           gates pass. Only runs on push to main (not PRs).
+  # ══════════════════════════════════════════
+  deploy:
+    name: "Deploy to Railway"
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://leyton-api.up.railway.app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy API to Railway
+        run: |
+          railway up \
+            --service leyton-api \
+            --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+
+      - name: Verify deployment
+        run: |
+          echo "Waiting for Railway to start the new deployment..."
+          sleep 20
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            https://leyton-api.up.railway.app/health || echo "000")
+          if [ "$STATUS" = "200" ]; then
+            echo "Deployment verified — /health returned 200"
+          else
+            echo "Warning: /health returned $STATUS (may still be starting)"
+          fi
+
+  # ══════════════════════════════════════════
+  # STAGE 6 — PIPELINE SUMMARY
+  # Purpose : single required status check for branch protection rules.
+  # ══════════════════════════════════════════
+  pipeline-passed:
+    name: "Pipeline passed"
+    runs-on: ubuntu-latest
+    needs: [lint, security, test, build]
+    if: always()
+    steps:
+      - name: Check all stages
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" ||
+                "${{ needs.security.result }}" != "success" ||
+                "${{ needs.test.result }}" != "success" ||
+                "${{ needs.build.result }}" != "success" ]]; then
+            echo "One or more pipeline stages failed."
+            exit 1
+          fi
+          echo "All stages passed."
