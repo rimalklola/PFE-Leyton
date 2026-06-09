@@ -12,6 +12,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ${{ github.repository_owner }}/leyton
+  APP_ROOT: leyton-automation
 
 jobs:
 
@@ -45,7 +46,7 @@ jobs:
 
       - name: Lint main.py
         run: |
-          flake8 services/${{ matrix.service }}/main.py \
+          flake8 ${{ env.APP_ROOT }}/services/${{ matrix.service }}/main.py \
             --max-line-length=120 \
             --extend-ignore=E402
 
@@ -81,7 +82,7 @@ jobs:
 
       - name: Bandit — static security analysis
         run: |
-          bandit services/${{ matrix.service }}/main.py \
+          bandit ${{ env.APP_ROOT }}/services/${{ matrix.service }}/main.py \
             -ll \
             --format txt \
             --exit-zero
@@ -89,7 +90,7 @@ jobs:
       - name: pip-audit — dependency vulnerability scan
         run: |
           pip-audit \
-            -r services/${{ matrix.service }}/requirements.txt \
+            -r ${{ env.APP_ROOT }}/services/${{ matrix.service }}/requirements.txt \
             --skip-editable \
             || echo "No packages to audit or audit passed."
 
@@ -121,13 +122,13 @@ jobs:
       - name: Install dependencies
         run: |
           pip install pytest pytest-cov
-          pip install -r services/${{ matrix.service }}/requirements.txt
+          pip install -r ${{ env.APP_ROOT }}/services/${{ matrix.service }}/requirements.txt
 
       - name: Run tests with coverage
         run: |
           SERVICE="${{ matrix.service }}"
           TEST_MODULE="test_${SERVICE//-/_}"
-          cd services/${{ matrix.service }}
+          cd ${{ env.APP_ROOT }}/services/${{ matrix.service }}
           python -m pytest ${TEST_MODULE}.py -v \
             --cov=. \
             --cov-report=xml:coverage.xml \
@@ -139,7 +140,7 @@ jobs:
         if: always()
         with:
           name: coverage-${{ matrix.service }}
-          path: services/${{ matrix.service }}/coverage.xml
+          path: ${{ env.APP_ROOT }}/services/${{ matrix.service }}/coverage.xml
 
   # ══════════════════════════════════════════
   # STAGE 4 — BUILD + PUSH
@@ -181,8 +182,8 @@ jobs:
       - name: Build (and push on main)
         uses: docker/build-push-action@v5
         with:
-          context: ./services
-          file: ./services/${{ matrix.service }}/Dockerfile
+          context: ./${{ env.APP_ROOT }}/services
+          file: ./${{ env.APP_ROOT }}/services/${{ matrix.service }}/Dockerfile
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:latest
